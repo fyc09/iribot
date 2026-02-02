@@ -1,0 +1,191 @@
+"""Session management for storing and retrieving chat sessions"""
+from typing import Dict, Optional, List, Any
+from datetime import datetime
+import json
+from pathlib import Path
+from models import Session, MessageRecord
+
+
+class SessionManager:
+    """Manages chat sessions and persistence"""
+    
+    def __init__(self, storage_path: str = "./sessions"):
+        self.storage_path = Path(storage_path)
+        self.storage_path.mkdir(exist_ok=True)
+        self.sessions: Dict[str, Session] = {}
+        self._load_all_sessions()
+    
+    def create_session(self, title: str = "New Chat", system_prompt: Optional[str] = None) -> Session:
+        """Create a new session with system message"""
+        session = Session(
+            title=title,
+            system_prompt=system_prompt or "You are a helpful assistant with the ability to execute commands and access files on the local system. Use the available tools when needed to help the user."
+        )
+        # Add system message as first record
+        system_record = MessageRecord(
+            role="system",
+            content=session.system_prompt
+        )
+        session.records.append(system_record.model_dump())
+        
+        self.sessions[session.id] = session
+        self._save_session(session)
+        return session
+    
+    def get_session(self, session_id: str) -> Optional[Session]:
+        """Get a session by ID"""
+        return self.sessions.get(session_id)
+    
+    def list_sessions(self) -> List[Session]:
+        """List all sessions sorted by updated_at descending"""
+        return sorted(
+            self.sessions.values(),
+            key=lambda s: s.updated_at,
+            reverse=True
+        )
+    
+    def add_record(self, session_id: str, record: Dict[str, Any]) -> Optional[Session]:
+        """Add a record to a session"""
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+        
+        session.records.append(record)
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return session
+    
+    def add_records(self, session_id: str, records: List[Dict[str, Any]]) -> Optional[Session]:
+        """Add multiple records to a session"""
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+        
+        session.records.extend(records)
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return session
+    
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session"""
+        if session_id not in self.sessions:
+            return False
+        
+        del self.sessions[session_id]
+        session_file = self.storage_path / f"{session_id}.json"
+        if session_file.exists():
+            session_file.unlink()
+        return True
+    
+    def update_system_prompt(self, session_id: str, system_prompt: str) -> Optional[Session]:
+        """Update session system prompt"""
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+        
+        session.system_prompt = system_prompt
+        # Update the system message record if it exists
+        if session.records and session.records[0].get("type") == "message" and session.records[0].get("role") == "system":
+            session.records[0]["content"] = system_prompt
+        
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return session
+    
+    def get_messages_for_llm(self, session_id: str) -> List[Dict[str, Any]]:
+        """Extract messages in LLM-compatible format from session records"""
+        session = self.sessions.get(session_id)
+        if not session:
+            return []
+        
+        messages = []
+        
+        for record in session.records:
+            if record.get("type") == "message":
+                role = record.get("role")
+                content = record.get("content", "")
+                
+                if role in ["system", "user"]:
+                    messages.append({"role": role, "content": content})
+                elif role == "assistant":
+                    # Check if this assistant message had tool calls following it
+                    messages.append({"role": "assistant", "content": content})
+            
+            elif record.get("type") == "tool_call":
+                # Add tool call to assistant message and tool result
+                tool_call_id = record.get("tool_call_id")
+                tool_name = record.get("tool_name")
+                arguments = record.get("arguments", {})
+                result = record.get("result")
+                
+                # If last message is assistant, add tool_calls to it
+                if messages and messages[-1]["role"] == "assistant":
+                    if "tool_calls" not in messages[-1]:
+                        messages[-1]["tool_calls"] = []
+                    messages[-1]["tool_calls"].append({
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments)
+                        }
+                    })
+                
+                # Add tool result message
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": json.dumps(result) if isinstance(result, dict) else str(result)
+                })
+        
+        return messages
+    
+    def _save_session(self, session: Session) -> None:
+        """Save session to disk"""
+        session_file = self.storage_path / f"{session.id}.json"
+        with open(session_file, 'w', encoding='utf-8') as f:
+            json.dump(session.model_dump(), f, indent=2, default=str, ensure_ascii=False)
+    
+    def _load_all_sessions(self) -> None:
+        """Load all sessions from disk"""
+        for session_file in self.storage_path.glob("*.json"):
+            try:
+                with open(session_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    # Handle migration from old format
+                    if "messages" in data and "records" not in data:
+                        data = self._migrate_old_format(data)
+                    session = Session(**data)
+                    self.sessions[session.id] = session
+            except Exception as e:
+                print(f"Error loading session {session_file}: {e}")
+    
+    def _migrate_old_format(self, data: Dict) -> Dict:
+        """Migrate from old message format to new record format"""
+        records = []
+        
+        # Add system message
+        records.append({
+            "type": "message",
+            "role": "system",
+            "content": data.get("system_prompt", ""),
+            "timestamp": data.get("created_at")
+        })
+        
+        # Convert old messages to records
+        for msg in data.get("messages", []):
+            records.append({
+                "type": "message",
+                "role": msg.get("role"),
+                "content": msg.get("content", ""),
+                "binary_content": msg.get("binary_content"),
+                "timestamp": msg.get("timestamp")
+            })
+        
+        data["records"] = records
+        del data["messages"]
+        return data
+
+
+# Global session manager instance
+session_manager = SessionManager()

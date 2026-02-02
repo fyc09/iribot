@@ -1,0 +1,55 @@
+@import "@tdesign-vue-next/chat/es/style/index.css";
+
+:root {
+  --td-chat-item-gap: 10px;
+  --tool-call-max-height: 400px;
+  --tool-status-max-height: 600px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  background: var(--td-bg-color-page);
+  color: var(--td-text-color-primary);
+  overflow: hidden;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--td-border-level-1);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--td-text-color-secondary);
+}
+
+/* 聊天内容最大宽度 */
+.t-chat__item__content__slot {
+  max-width: var(--td-chat-item-content-max-width);
+}

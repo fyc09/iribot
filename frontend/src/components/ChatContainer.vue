@@ -2,7 +2,7 @@
   <t-layout class="chat-main">
     <div class="chat-toolbar">
       <t-button theme="primary" variant="text" @click="openToolStatus">
-        查看工具状态
+        View tool status
       </t-button>
     </div>
     <ChatMessages :messages="messages" />
@@ -14,7 +14,7 @@
     />
     <t-dialog
       v-model:visible="toolStatusVisible"
-      header="工具状态"
+      header="Tool Status"
       width="1920px"
       :footer="false"
       @open="handleRefreshTools"

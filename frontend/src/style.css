@@ -30,7 +30,7 @@ body {
   overflow: hidden;
 }
 
-/* 滚动条美化 */
+/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -49,7 +49,7 @@ body {
   background: var(--td-text-color-secondary);
 }
 
-/* 聊天内容最大宽度 */
+/* Max width for chat content */
 .t-chat__item__content__slot {
   max-width: var(--td-chat-item-content-max-width);
 }

@@ -1,7 +1,7 @@
 <template>
   <t-aside class="chat-sidebar">
     <div class="sidebar-header">
-      <h2>会话</h2>
+      <h2>Sessions</h2>
       <t-button
         theme="primary"
         variant="text"

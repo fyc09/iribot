@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 def get_local_now():
-    """获取当前本地时间"""
+    """Get the current local time."""
     return datetime.now()
 
 

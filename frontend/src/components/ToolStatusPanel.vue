@@ -5,7 +5,7 @@
         <template #icon>
           <t-icon name="refresh" />
         </template>
-        刷新
+        Refresh
       </t-button>
     </div>
     <t-collapse :default-value="[]" class="tools-collapse">
@@ -13,10 +13,18 @@
         v-for="tool in toolStatuses"
         :key="tool.name"
         :value="tool.name"
-        :header="`${tool.name} - ${tool.status === 'ok' ? '✅' : '❌'}`"
       >
-        <ExecuteCommandStatus
-          v-if="tool.name === 'execute_command'"
+        <template #header>
+          <div>
+            <span>{{ tool.name }}</span>
+            &nbsp;
+            <t-tag v-if="tool.status === 'ok'" theme="success" variant="light">Success</t-tag>
+            <t-tag v-else-if="tool.status" theme="danger" variant="light">Failed</t-tag>
+            <t-tag v-else theme="warning" variant="light">Running</t-tag>
+          </div>
+        </template>
+        <ShellToolStatus
+          v-if="tool.name === 'shell'"
           :status="tool"
         />
         <DefaultToolStatus v-else :status="tool" />
@@ -27,7 +35,7 @@
 
 <script setup>
 import { ref } from "vue";
-import ExecuteCommandStatus from "./tool-status/ExecuteCommandStatus.vue";
+import ShellToolStatus from "./tool-status/ShellToolStatus.vue";
 import DefaultToolStatus from "./tool-status/DefaultToolStatus.vue";
 
 defineProps({

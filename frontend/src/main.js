@@ -7,6 +7,8 @@ import { ChatList, ChatMessage, ChatSender } from '@tdesign-vue-next/chat'
 
 const app = createApp(App)
 
+document.documentElement.setAttribute('theme-mode', 'dark');
+
 app.use(TDesign)
 app.component('t-chat-list', ChatList)
 app.component('t-chat-message', ChatMessage)

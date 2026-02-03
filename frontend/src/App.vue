@@ -25,15 +25,15 @@ import { MessagePlugin } from "tdesign-vue-next";
 import ChatSidebar from "./components/ChatSidebar.vue";
 import ChatContainer from "./components/ChatContainer.vue";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "/api";
 
-// 状态管理
+// State management
 const sessions = ref([]);
 const currentSessionId = ref(null);
 const inputMessage = ref("");
 const toolStatuses = ref([]);
 
-// useChat Hook - 仅用于消息显示管理
+// useChat hook - only for message display management
 const { chatEngine, messages, status } = useChat({
   defaultMessages: [],
 });
@@ -93,7 +93,7 @@ async function selectSession(sessionId) {
     if (!response.ok) throw new Error("Failed to load session");
     const session = await response.json();
 
-    // 将records转换为UI消息
+    // Convert records to UI messages
     const convertedMessages = convertRecordsToMessages(session.records || []);
 
     await chatEngine.value?.setMessages(convertedMessages, "replace");
@@ -109,10 +109,10 @@ async function deleteSession(sessionId) {
     });
     if (!response.ok) throw new Error("Failed to delete session");
     
-    // 从列表中移除
+    // Remove from list
     sessions.value = sessions.value.filter(s => s.id !== sessionId);
     
-    // 如果删除的是当前会话，选择其他会话
+    // If the current session is deleted, select another one
     if (currentSessionId.value === sessionId) {
       if (sessions.value.length > 0) {
         await selectSession(sessions.value[0].id);
@@ -128,7 +128,7 @@ async function deleteSession(sessionId) {
   }
 }
 
-// 将session records转换为UI消息格式 - 每个工具调用独立显示
+// Convert session records to UI message format - each tool call is shown separately
 function convertRecordsToMessages(records) {
   const messages = [];
 
@@ -137,7 +137,7 @@ function convertRecordsToMessages(records) {
 
     if (record.type === "message") {
       if (record.role === "system") {
-        // 跳过系统消息，不显示在UI
+        // Skip system messages in the UI
         continue;
       } else if (record.role === "user") {
         messages.push({
@@ -148,7 +148,7 @@ function convertRecordsToMessages(records) {
           status: "complete",
         });
       } else if (record.role === "assistant") {
-        // assistant消息直接显示
+        // Assistant messages are shown directly
         if (record.content) {
           messages.push({
             id: `assistant_${i}`,
@@ -160,7 +160,7 @@ function convertRecordsToMessages(records) {
         }
       }
     } else if (record.type === "tool_call") {
-      // 每个工具调用作为独立的assistant消息
+      // Each tool call is a separate assistant message
       messages.push({
         id: `tool_${i}`,
         role: "assistant",
@@ -174,7 +174,7 @@ function convertRecordsToMessages(records) {
   return messages;
 }
 
-// 当前流式响应的 AbortController
+// AbortController for the current streaming response
 let currentAbortController = null;
 
 async function sendMessage(userInput) {
@@ -184,11 +184,11 @@ async function sendMessage(userInput) {
   loading.value = true;
   inputMessage.value = "";
 
-  // 创建新的 AbortController
+  // Create a new AbortController
   currentAbortController = new AbortController();
 
   try {
-    // 获取当前消息列表，添加用户消息
+    // Get current message list and add the user message
     let currentMessages = [...(messages.value || [])];
     const userMsg = {
       id: `user_${Date.now()}`,
@@ -199,7 +199,7 @@ async function sendMessage(userInput) {
     currentMessages.push(userMsg);
     await chatEngine.value?.setMessages(currentMessages, "replace");
 
-    // 使用流式 API
+    // Use streaming API
     const response = await fetch(`${API_BASE}/chat/stream`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -216,8 +216,8 @@ async function sendMessage(userInput) {
     const decoder = new TextDecoder();
     let sseBuffer = "";
 
-    let currentAssistantMsg = null; // 当前正在流式输出的助手消息
-    let streamingContent = ""; // 累积的流式内容
+    let currentAssistantMsg = null; // Assistant message currently streaming
+    let streamingContent = ""; // Accumulated streaming content
 
     while (true) {
       const { done, value } = await reader.read();
@@ -241,11 +241,11 @@ async function sendMessage(userInput) {
           const event = JSON.parse(jsonStr);
 
           if (event.type === "content") {
-            // 流式内容
+            // Streaming content
             streamingContent += event.content;
 
             if (!currentAssistantMsg) {
-              // 创建新的助手消息
+              // Create a new assistant message
               currentAssistantMsg = {
                 id: `assistant_${Date.now()}`,
                 role: "assistant",
@@ -255,7 +255,7 @@ async function sendMessage(userInput) {
               currentMessages = [...(messages.value || [])];
               currentMessages.push(currentAssistantMsg);
             } else {
-              // 更新现有消息 - 创建新对象避免修改只读属性
+              // Update existing message - create new object to avoid mutating read-only props
               currentAssistantMsg = {
                 ...currentAssistantMsg,
                 content: [{ type: "markdown", data: streamingContent }],
@@ -266,13 +266,13 @@ async function sendMessage(userInput) {
 
             await chatEngine.value?.setMessages(currentMessages, "replace");
           } else if (event.type === "record") {
-            // 完成的记录（assistant消息或其他）
+            // Completed record (assistant message or other)
             if (
               event.record.type === "message" &&
               event.record.role === "assistant"
             ) {
               if (currentAssistantMsg) {
-                // 如果有流式消息，更新为完成状态 - 创建新对象
+                // If there is a streaming message, update it to complete - create new object
                 currentAssistantMsg = {
                   ...currentAssistantMsg,
                   content: [{ type: "markdown", data: event.record.content.trim() }],
@@ -285,7 +285,7 @@ async function sendMessage(userInput) {
                 currentAssistantMsg = null;
                 streamingContent = "";
               } else if (event.record.content) {
-                // 没有流式消息，但有新的 assistant 记录（如工具调用后的思考过程）
+                // No streaming message, but a new assistant record (e.g. tool-call reasoning)
                 const newAssistantMsg = {
                   id: `assistant_${Date.now()}_${Math.random()}`,
                   role: "assistant",
@@ -298,7 +298,7 @@ async function sendMessage(userInput) {
               }
             }
           } else if (event.type === "tool_start") {
-            // 工具开始执行 - 先完成当前流式消息
+            // Tool execution starts - finish current streaming message first
             if (currentAssistantMsg && streamingContent) {
               currentAssistantMsg = {
                 ...currentAssistantMsg,
@@ -311,10 +311,10 @@ async function sendMessage(userInput) {
               streamingContent = "";
             }
 
-            // 为每个工具创建唯一ID，使用 tool_call_id 如果有的话
+            // Create a unique ID for each tool, use tool_call_id if available
             const toolMsgId = `tool_${event.tool_call_id || Date.now()}_${Math.random()}`;
 
-            // 格式化参数
+            // Format arguments
             let argsStr = "";
             try {
               argsStr = JSON.stringify(event.arguments, null, 2);
@@ -322,7 +322,7 @@ async function sendMessage(userInput) {
               argsStr = String(event.arguments);
             }
 
-            // 添加工具执行中的消息
+            // Add a message for tool execution
             const toolStartMsg = {
               id: toolMsgId,
               role: "assistant",
@@ -333,36 +333,36 @@ async function sendMessage(userInput) {
                     componentType: "tool-call",
                     funcName: event.tool_name,
                     args: event.arguments,
-                    result: "⏳ 执行中...",
-                    success: null, // null 表示执行中
+                    result: "⏳ Running...",
+                    success: null, // null means in progress
                   },
                 },
               ],
               status: "streaming",
-              _toolCallId: event.tool_call_id, // 保存tool_call_id用于后续匹配
+              _toolCallId: event.tool_call_id, // Store tool_call_id for later matching
             };
             currentMessages = [...(messages.value || [])];
             currentMessages.push(toolStartMsg);
             await chatEngine.value?.setMessages(currentMessages, "replace");
           } else if (event.type === "tool_result") {
-            // 工具执行完成 - 找到对应的工具消息并更新
+            // Tool execution completed - find and update the matching tool message
             const toolRecord = event.record;
             currentMessages = [...(messages.value || [])];
 
-            // 查找对应的工具消息（通过 tool_call_id 匹配）
+            // Find the matching tool message (by tool_call_id)
             const toolMsgIndex = currentMessages.findIndex(
               (msg) => msg._toolCallId === toolRecord.tool_call_id,
             );
 
             if (toolMsgIndex !== -1) {
-              // 更新对应的工具消息
+              // Update matching tool message
               currentMessages[toolMsgIndex] = {
                 ...currentMessages[toolMsgIndex],
                 content: formatToolCallContent(toolRecord),
                 status: "complete",
               };
             } else {
-              // 如果找不到，添加为新消息
+              // If not found, add a new message
               currentMessages.push({
                 id: `tool_${Date.now()}_${Math.random()}`,
                 role: "assistant",
@@ -372,10 +372,10 @@ async function sendMessage(userInput) {
             }
             await chatEngine.value?.setMessages(currentMessages, "replace");
           } else if (event.type === "done") {
-            // 完成
+            // Done
             break;
           } else if (event.type === "error") {
-            // 错误
+            // Error
             const errorMsg = {
               id: `error_${Date.now()}`,
               role: "assistant",
@@ -395,7 +395,7 @@ async function sendMessage(userInput) {
     await loadSessions();
   } catch (error) {
     if (error.name === "AbortError") {
-      // 用户中止
+      // User aborted
       const currentMessages = [...(messages.value || [])];
       const lastMsg = currentMessages[currentMessages.length - 1];
       if (lastMsg && lastMsg.status === "streaming") {
@@ -404,7 +404,7 @@ async function sendMessage(userInput) {
           status: "complete",
           content: [
             ...lastMsg.content,
-            { type: "markdown", data: "\n\n*[已停止]*" },
+            { type: "markdown", data: "\n\n*[Stopped]*" },
           ],
         };
         await chatEngine.value?.setMessages(currentMessages, "replace");
@@ -431,7 +431,7 @@ async function sendMessage(userInput) {
   }
 }
 
-// 停止生成
+// Stop generation
 function stopMessage() {
   if (currentAbortController) {
     currentAbortController.abort();
@@ -439,9 +439,9 @@ function stopMessage() {
   chatEngine.value?.abortChat();
 }
 
-// 格式化单个工具调用 - 返回 content 数组
+// Format a single tool call - returns content array
 function formatToolCallContent(tc) {
-  const funcName = tc.tool_name || "未知工具";
+  const funcName = tc.tool_name || "Unknown tool";
   const args = tc.arguments || {};
   const result = tc.result;
   const success = tc.success;
@@ -460,7 +460,7 @@ function formatToolCallContent(tc) {
   ];
 }
 
-// 时间格式化
+// Time formatting
 function formatTime(timestamp) {
   if (!timestamp) return "";
   const date = new Date(timestamp);
@@ -477,7 +477,7 @@ function formatTime(timestamp) {
   });
 }
 
-// 初始化
+// Initialize
 onMounted(() => {
   loadSessions();
   loadToolStatuses();

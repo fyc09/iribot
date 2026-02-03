@@ -4,17 +4,17 @@ import subprocess
 import platform
 import threading
 import time
+import uuid
 from collections import deque
-from typing import Any, Dict, Optional, Deque, Tuple
-from .base import BaseTool
+from typing import Any, Dict, Optional, Deque, Tuple, List
+from .base import BaseTool, BaseToolGroup, BaseStatus
 from config import settings
 
 
 class ShellSession:
     """Persistent shell session with async output capture"""
 
-    def __init__(self, shell_type: str, working_dir: Optional[str] = None):
-        self.shell_type = shell_type
+    def __init__(self, working_dir: Optional[str] = None):
         self.working_dir = working_dir
         self._output: Deque[Tuple[str, str]] = deque()
         self._log: Deque[Dict[str, str]] = deque()
@@ -127,19 +127,77 @@ class ShellSession:
 _shell_sessions: Dict[str, ShellSession] = {}
 
 
-class ExecuteCommandTool(BaseTool):
-    """Interactive shell tool with per-session shells"""
+def _collect_output_until_marker(
+    session: ShellSession,
+    marker: str,
+    wait_ms: int,
+    max_chars: int,
+) -> Tuple[str, str, bool]:
+    """
+    Collect output from session until marker is found or timeout.
+    
+    Returns: (stdout, stderr, marker_found)
+    """
+    max_wait_time = wait_ms if wait_ms > 0 else 100000
+    start_time = time.time() * 1000
+    all_stdout = []
+    all_stderr = []
+    marker_found = False
+
+    while (time.time() * 1000 - start_time) < max_wait_time:
+        output = session.read(wait_ms=100, max_chars=max_chars)
+        stdout_chunk = output.get("stdout", "")
+        stderr_chunk = output.get("stderr", "")
+
+        if marker in stdout_chunk:
+            stdout_chunk = stdout_chunk.split(marker)[0]
+            marker_found = True
+
+        if stdout_chunk:
+            all_stdout.append(stdout_chunk)
+        if stderr_chunk:
+            all_stderr.append(stderr_chunk)
+
+        if marker_found:
+            break
+
+        if not stdout_chunk and not stderr_chunk:
+            time.sleep(0.01)
+
+    return "".join(all_stdout), "".join(all_stderr), marker_found
+
+
+def _ensure_session(session_id: str, working_dir: Optional[str] = None) -> ShellSession:
+    if session_id not in _shell_sessions or not _shell_sessions[session_id].is_alive():
+        _shell_sessions[session_id] = ShellSession(working_dir=working_dir)
+        if working_dir:
+            _shell_sessions[session_id].write(f'cd "{working_dir}"')
+    return _shell_sessions[session_id]
+
+
+def _get_sessions_status() -> List[Dict[str, Any]]:
+    sessions = []
+    for session_id, session in _shell_sessions.items():
+        sessions.append({
+            "session_id": session_id,
+            "working_dir": session.working_dir,
+            "alive": session.is_alive(),
+            "pid": session.process.pid if session.process else None,
+            "log": session.get_log(),
+        })
+    return sessions
+
+
+class ShellStartTool(BaseTool):
+    """Start a persistent shell session"""
 
     @property
     def name(self) -> str:
-        return "execute_command"
+        return "shell_start"
 
     @property
     def description(self) -> str:
-        return (
-            "Interactive Bash session. Actions: start, run, write, read, stop. "
-            "Use session_id to keep a persistent shell per agent/session."
-        )
+        return "Start a persistent bash shell session."
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -148,167 +206,307 @@ class ExecuteCommandTool(BaseTool):
             "properties": {
                 "session_id": {
                     "type": "string",
-                    "description": "Session/agent identifier for persistent shell"
-                },
-                "action": {
-                    "type": "string",
-                    "description": "Action to perform",
-                    "enum": ["start", "run", "write", "read", "stop"]
-                },
-                "command": {
-                    "type": "string",
-                    "description": "Command to run (for action: run)"
-                },
-                "input": {
-                    "type": "string",
-                    "description": "Input to write to stdin (for action: write)"
-                },
-                "wait_ms": {
-                    "type": "integer",
-                    "description": "Wait time in milliseconds before reading output (for action: read)",
-                    "default": 0
-                },
-                "max_chars": {
-                    "type": "integer",
-                    "description": "Max characters to return from buffered output (for action: read)",
-                    "default": 20000
+                    "description": "Session/agent identifier for persistent shell",
                 },
                 "working_dir": {
                     "type": "string",
-                    "description": "Working directory to start shell (optional)"
-                }
+                    "description": "Working directory to start shell (optional)",
+                },
             },
-            "required": []
+            "required": [],
         }
 
     def execute(
         self,
         session_id: Optional[str] = None,
-        action: str = "run",
-        command: Optional[str] = None,
-        input: Optional[str] = None,
+        working_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        session_id = session_id or "default"
+        _ensure_session(session_id, working_dir=working_dir)
+        return {
+            "success": True,
+            "session_id": session_id,
+            "status": "started",
+        }
+
+
+class ShellRunTool(BaseTool):
+    """Run a command in a shell session"""
+
+    @property
+    def name(self) -> str:
+        return "shell_run"
+
+    @property
+    def description(self) -> str:
+        return "Run a command in a persistent bash session. **IMPORTANT**: If 'background' is set to true, the command will run in the background and the tool will return immediately. This will occupy the shell session; start a new session for other commands."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session/agent identifier for persistent shell",
+                },
+                "command": {
+                    "type": "string",
+                    "description": "Command to run",
+                },
+                "wait_ms": {
+                    "type": "integer",
+                    "description": "Max wait time in milliseconds for command completion",
+                },
+                "max_chars": {
+                    "type": "integer",
+                    "description": "Max characters to return from buffered output",
+                    "default": 20000,
+                },
+                "background": {
+                    "type": "boolean",
+                    "description": "Run command in background and return immediately. **IMPORTANT** This will occupy the shell session; start a new session for other commands.",
+                    "default": False,
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "Working directory to start shell (optional)",
+                },
+            },
+            "required": ["command", "background"],
+        }
+
+    def execute(
+        self,
+        command: str,
+        session_id: Optional[str] = None,
+        wait_ms: Optional[int] = None,
+        max_chars: int = 20000,
+        background: bool = False,
+        working_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        session_id = session_id or "default"
+        session = _ensure_session(session_id, working_dir=working_dir)
+
+        if wait_ms is None:
+            wait_ms = 10000 if background else 100000
+
+        marker = f"__CMD_DONE_{uuid.uuid4().hex[:8]}__"
+
+        session.write(command)
+        session.write(f"echo {marker}")
+
+        if background:
+            # For background mode, only wait if wait_ms is specified
+            if wait_ms and wait_ms > 0:
+                stdout, stderr, marker_found = _collect_output_until_marker(
+                    session, marker, wait_ms, max_chars
+                )
+                status = "completed" if marker_found else "running"
+            else:
+                stdout, stderr, status = "", "", "running"
+            
+            return {
+                "success": True,
+                "session_id": session_id,
+                "status": status,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+        else:
+            # For normal mode, wait until completion or timeout
+            max_wait_time = wait_ms if wait_ms > 0 else 100000
+            stdout, stderr, marker_found = _collect_output_until_marker(
+                session, marker, max_wait_time, max_chars
+            )
+            
+            return {
+                "success": True,
+                "session_id": session_id,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+
+
+class ShellWriteTool(BaseTool):
+    """Write input to a shell session"""
+
+    @property
+    def name(self) -> str:
+        return "shell_write"
+
+    @property
+    def description(self) -> str:
+        return "Write input to stdin of a persistent bash session."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session/agent identifier for persistent shell",
+                },
+                "input": {
+                    "type": "string",
+                    "description": "Input to write to stdin",
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "Working directory to start shell (optional)",
+                },
+            },
+            "required": ["input"],
+        }
+
+    def execute(
+        self,
+        input: str,
+        session_id: Optional[str] = None,
+        working_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        session_id = session_id or "default"
+        session = _ensure_session(session_id, working_dir=working_dir)
+        session.write(input)
+        return {
+            "success": True,
+            "session_id": session_id,
+        }
+
+
+class ShellReadTool(BaseTool):
+    """Read output from a shell session"""
+
+    @property
+    def name(self) -> str:
+        return "shell_read"
+
+    @property
+    def description(self) -> str:
+        return "Read buffered output from a persistent bash session."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session/agent identifier for persistent shell",
+                },
+                "wait_ms": {
+                    "type": "integer",
+                    "description": "Wait time in milliseconds before reading output",
+                    "default": 0,
+                },
+                "max_chars": {
+                    "type": "integer",
+                    "description": "Max characters to return from buffered output",
+                    "default": 20000,
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "Working directory to start shell (optional)",
+                },
+            },
+            "required": [],
+        }
+
+    def execute(
+        self,
+        session_id: Optional[str] = None,
         wait_ms: int = 0,
         max_chars: int = 20000,
         working_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Execute an interactive shell action"""
-        shell_type = "bash"
         session_id = session_id or "default"
+        session = _ensure_session(session_id, working_dir=working_dir)
+        default_wait_ms = wait_ms if wait_ms > 0 else 1000
+        output = session.read(wait_ms=default_wait_ms, max_chars=max_chars)
+        return {
+            "success": True,
+            "session_id": session_id,
+            **output,
+        }
 
-        if action == "start":
-            if session_id not in _shell_sessions or not _shell_sessions[session_id].is_alive():
-                _shell_sessions[session_id] = ShellSession(shell_type, working_dir=working_dir)
-                if working_dir:
-                    _shell_sessions[session_id].write(f"cd {working_dir}")
+
+class ShellStopTool(BaseTool):
+    """Stop a shell session"""
+
+    @property
+    def name(self) -> str:
+        return "shell_stop"
+
+    @property
+    def description(self) -> str:
+        return "Stop a persistent bash session."
+
+    @property
+    def parameters(self) -> Dict[str, Any]:
+        return {
+            "type": "object",
+            "properties": {
+                "session_id": {
+                    "type": "string",
+                    "description": "Session/agent identifier for persistent shell",
+                },
+            },
+            "required": [],
+        }
+
+    def execute(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+        session_id = session_id or "default"
+        session = _shell_sessions.get(session_id)
+        if not session or not session.is_alive():
             return {
                 "success": True,
                 "session_id": session_id,
-                "shell_type": shell_type,
-                "status": "started"
+                "status": "stopped",
             }
+        session.terminate()
+        return {
+            "success": True,
+            "session_id": session_id,
+            "status": "stopped",
+        }
 
-        if session_id not in _shell_sessions or not _shell_sessions[session_id].is_alive():
-            _shell_sessions[session_id] = ShellSession(shell_type, working_dir=working_dir)
-            if working_dir:
-                _shell_sessions[session_id].write(f"cd {working_dir}")
 
-        session = _shell_sessions[session_id]
+class ShellToolGroup(BaseToolGroup):
+    """Shell tool group"""
 
-        if action == "run":
-            if not command:
-                return {"success": False, "error": "command is required for action=run"}
-            
-            # Use a unique marker to detect command completion
-            import uuid
-            marker = f"__CMD_DONE_{uuid.uuid4().hex[:8]}__"
-            
-            # Write command followed by echo marker
-            session.write(command)
-            session.write(f"echo {marker}")
-            
-            # Read output until marker appears or timeout
-            max_wait_time = wait_ms if wait_ms > 0 else 10000  # Default 10 seconds
-            start_time = time.time() * 1000
-            all_stdout = []
-            all_stderr = []
-            marker_found = False
-            
-            while (time.time() * 1000 - start_time) < max_wait_time:
-                output = session.read(wait_ms=500, max_chars=max_chars)
-                stdout_chunk = output.get("stdout", "")
-                stderr_chunk = output.get("stderr", "")
-                
-                if marker in stdout_chunk:
-                    # Remove marker and everything after it
-                    stdout_chunk = stdout_chunk.split(marker)[0]
-                    marker_found = True
-                
-                if stdout_chunk:
-                    all_stdout.append(stdout_chunk)
-                if stderr_chunk:
-                    all_stderr.append(stderr_chunk)
-                    
-                if marker_found:
-                    break
-                    
-                # If no output, wait a bit before next read
-                if not stdout_chunk and not stderr_chunk:
-                    time.sleep(0.1)
-            
-            # Always return success: True since we executed the command
-            # If there's an error, it will be in stderr
-            return {
-                "success": True,
-                "session_id": session_id,
-                "shell_type": shell_type,
-                "stdout": "".join(all_stdout),
-                "stderr": "".join(all_stderr),
-            }
+    @property
+    def name(self) -> str:
+        return "shell"
 
-        if action == "write":
-            if input is None:
-                return {"success": False, "error": "input is required for action=write"}
-            session.write(input)
-            return {
-                "success": True,
-                "session_id": session_id,
-                "shell_type": shell_type,
-            }
+    @property
+    def description(self) -> str:
+        return "Persistent bash shell tools."
 
-        if action == "read":
-            default_wait_ms = wait_ms if wait_ms > 0 else 1000
-            output = session.read(wait_ms=default_wait_ms, max_chars=max_chars)
-            return {
-                "success": True,
-                "session_id": session_id,
-                "shell_type": shell_type,
-                **output,
-            }
+    def get_tools(self) -> List[BaseTool]:
+        return [
+            ShellStartTool(),
+            ShellRunTool(),
+            ShellWriteTool(),
+            ShellReadTool(),
+            ShellStopTool(),
+        ]
 
-        if action == "stop":
-            session.terminate()
-            return {
-                "success": True,
-                "session_id": session_id,
-                "shell_type": shell_type,
-                "status": "stopped"
-            }
 
-        return {"success": False, "error": f"Unknown action: {action}"}
+class ShellStatus(BaseStatus):
+    """Status provider for shell sessions"""
+
+    @property
+    def name(self) -> str:
+        return "shell"
+
+    @property
+    def description(self) -> str:
+        return "Persistent bash shell status."
 
     def get_status(self) -> Dict[str, Any]:
-        sessions = []
-        for session_id, session in _shell_sessions.items():
-            sessions.append({
-                "session_id": session_id,
-                "shell_type": session.shell_type,
-                "working_dir": session.working_dir,
-                "alive": session.is_alive(),
-                "pid": session.process.pid if session.process else None,
-                "log": session.get_log(),
-            })
         return {
             "name": self.name,
             "status": "ok",
-            "sessions": sessions,
+            "sessions": _get_sessions_status(),
         }

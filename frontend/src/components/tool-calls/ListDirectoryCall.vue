@@ -4,23 +4,19 @@
       <t-collapse-panel :value="1" destroy-on-close>
         <template #header>
           <div>
-            <span>📁 列举目录 </span>
+            <span>📁 List Directory</span>
+            &nbsp;
             <code>{{ args.path }}</code>
             &nbsp;
-            <t-tag v-if="result === null" theme="warning" variant="light">列举中</t-tag>
-            <t-tag v-else-if="result?.success" theme="success" variant="light">成功</t-tag>
-            <t-tag v-else theme="danger" variant="light">失败</t-tag>
+            <t-tag v-if="result?.success === true" theme="success" variant="light">Success</t-tag>
+            <t-tag v-else-if="result?.success === false" theme="danger" variant="light">Failed</t-tag>
+            <t-tag v-else theme="warning" variant="light">Running</t-tag>
           </div>
         </template>
         <div class="content-area">
           <t-space direction="vertical">
-            <div v-if="result">
+            <template v-if="result">
               <div v-if="result.success && displayItems.length > 0">
-                <t-typography>
-                  <t-typography-paragraph>
-                    <span>{{ displayItems.length }} 项</span>
-                  </t-typography-paragraph>
-                </t-typography>
                 <t-table 
                   :data="displayItems" 
                   :columns="columns"
@@ -38,9 +34,9 @@
                 </t-table>
               </div>
               <t-alert v-else theme="error">
-                <t-typography-text>{{ result.message || JSON.stringify(result) }}</t-typography-text>
+                <pre>{{ result.error }}</pre>
               </t-alert>
-            </div>
+            </template>
           </t-space>
         </div>
       </t-collapse-panel>
@@ -63,8 +59,8 @@ const props = defineProps({
 });
 
 const columns = [
-  { colKey: 'type', title: '类型', width: '60px' },
-  { colKey: 'name', title: '文件名', ellipsis: true },
+  { colKey: 'type', title: 'Type', width: '50px' },
+  { colKey: 'name', title: 'Name', ellipsis: true },
 ];
 
 const displayItems = computed(() => {

@@ -1,12 +1,13 @@
 <template>
-  <div class="read-file-call">
+  <div class="shell-write-call">
     <t-collapse>
       <t-collapse-panel :value="1" destroy-on-close>
         <template #header>
           <div>
-            <span>📖 Read File</span>
+            <span>✍️ Write Input</span>
             &nbsp;
-            <code>{{ args.file_path }}</code>
+            <code v-if="args.input">{{ args.input }}</code>
+            <code v-else-if="args.session_id">({{ args.session_id }})</code>
             &nbsp;
             <t-tag
               v-if="result?.success === true"
@@ -25,17 +26,14 @@
         </template>
         <div class="content-area">
           <t-space direction="vertical">
-            <div v-if="args.start_line !== undefined">
-              Start line: <code>{{ args.start_line }}</code>
+            <div v-if="args.session_id">
+              Session ID: <code>{{ args.session_id }}</code>
             </div>
-            <div v-if="args.end_line !== undefined">
-              End line: <code>{{ args.end_line }}</code>
+            <div v-if="args.working_dir">
+              Working Directory: <code>{{ args.working_dir }}</code>
             </div>
             <template v-if="result">
-              <div v-if="result.success">
-                <pre>{{ result.content }}</pre>
-              </div>
-              <t-alert v-else theme="error">
+              <t-alert v-if="!result.success" theme="error">
                 <pre>{{ result.error }}</pre>
               </t-alert>
             </template>
@@ -47,13 +45,17 @@
 </template>
 
 <script setup>
-const props = defineProps({
+defineProps({
   args: {
     type: Object,
     default: () => ({}),
   },
   result: {
     type: Object,
+    default: null,
+  },
+  success: {
+    type: [Boolean, null],
     default: null,
   },
 });

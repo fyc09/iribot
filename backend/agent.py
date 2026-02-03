@@ -137,7 +137,7 @@ class Agent:
         """
         try:
             args = json.loads(arguments) if arguments else {}
-            if tool_name == "execute_command" and context:
+            if tool_name.startswith("shell_") and context:
                 if "session_id" not in args and context.get("session_id"):
                     args["session_id"] = context["session_id"]
             result = tool_executor.execute_tool(tool_name, **args)

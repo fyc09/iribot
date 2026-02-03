@@ -1,7 +1,31 @@
 <template>
   <div class="tool-call-message">
-    <ExecuteCommandCall
-      v-if="toolData.funcName === 'execute_command'"
+    <ShellStartCall
+      v-if="toolData.funcName === 'shell_start'"
+      :args="toolData.args"
+      :result="toolData.result"
+      :success="toolData.success"
+    />
+    <ShellRunCall
+      v-else-if="toolData.funcName === 'shell_run'"
+      :args="toolData.args"
+      :result="toolData.result"
+      :success="toolData.success"
+    />
+    <ShellWriteCall
+      v-else-if="toolData.funcName === 'shell_write'"
+      :args="toolData.args"
+      :result="toolData.result"
+      :success="toolData.success"
+    />
+    <ShellReadCall
+      v-else-if="toolData.funcName === 'shell_read'"
+      :args="toolData.args"
+      :result="toolData.result"
+      :success="toolData.success"
+    />
+    <ShellStopCall
+      v-else-if="toolData.funcName === 'shell_stop'"
       :args="toolData.args"
       :result="toolData.result"
       :success="toolData.success"
@@ -25,14 +49,18 @@
       :success="toolData.success"
     />
     <div v-else class="unknown-tool">
-      <p>未知工具: {{ toolData.funcName }}</p>
+      <p>Unknown tool: {{ toolData.funcName }}</p>
       <pre>{{ JSON.stringify(toolData, null, 2) }}</pre>
     </div>
   </div>
 </template>
 
 <script setup>
-import ExecuteCommandCall from "./tool-calls/ExecuteCommandCall.vue";
+import ShellStartCall from "./tool-calls/ShellStartCall.vue";
+import ShellRunCall from "./tool-calls/ShellRunCall.vue";
+import ShellWriteCall from "./tool-calls/ShellWriteCall.vue";
+import ShellReadCall from "./tool-calls/ShellReadCall.vue";
+import ShellStopCall from "./tool-calls/ShellStopCall.vue";
 import ReadFileCall from "./tool-calls/ReadFileCall.vue";
 import WriteFileCall from "./tool-calls/WriteFileCall.vue";
 import ListDirectoryCall from "./tool-calls/ListDirectoryCall.vue";

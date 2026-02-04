@@ -333,7 +333,7 @@ async function sendMessage(userInput) {
                     componentType: "tool-call",
                     funcName: event.tool_name,
                     args: event.arguments,
-                    result: "⏳ Running...",
+                    result: null,
                     success: null, // null means in progress
                   },
                 },

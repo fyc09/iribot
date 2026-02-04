@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "iribot"
-version = "0.1.1"
+name = "iridet-bot"
+version = "0.1.1-alpha.1"
 description = "Full-stack AI agent with Python backend and Vue frontend"
 readme = "README.md"
 requires-python = ">=3.9"

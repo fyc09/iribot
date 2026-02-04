@@ -10,11 +10,14 @@ from models import (
     SystemPromptUpdate,
     ChatRequest,
     MessageRecord,
-    ToolCallRecord
+    ToolCallRecord,
+    SystemPromptGenerateRequest,
+    SystemPromptGenerateResponse,
 )
 from session_manager import session_manager
 from agent import agent
 from executor import tool_executor
+from prompt_generator import generate_system_prompt
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -32,13 +35,64 @@ app.add_middleware(
 )
 
 
-# Session endpoints
+# Prompt Generation Endpoints
+@app.post("/api/prompt/generate")
+def generate_prompt(request: SystemPromptGenerateRequest):
+    """
+    Generate a system prompt with current date/time, safety policies, and tool descriptions
+    
+    Args:
+        request: GeneratePromptRequest with optional custom_instructions
+        
+    Returns:
+        Generated system prompt with metadata
+    """
+    from prompt_generator import get_current_datetime_info
+    
+    prompt = generate_system_prompt(
+        custom_instructions=request.custom_instructions
+    )
+    
+    return SystemPromptGenerateResponse(
+        system_prompt=prompt,
+        datetime_info=get_current_datetime_info()
+    )
+
+
+@app.get("/api/prompt/generate")
+def generate_prompt_get(custom_instructions: str = ""):
+    """
+    Generate a system prompt (GET endpoint for convenience)
+    
+    Query Parameters:
+        custom_instructions: Optional custom instructions
+        
+    Returns:
+        Generated system prompt with metadata
+    """
+    from prompt_generator import get_current_datetime_info
+    
+    prompt = generate_system_prompt(
+        custom_instructions=custom_instructions
+    )
+    
+    return SystemPromptGenerateResponse(
+        system_prompt=prompt,
+        datetime_info=get_current_datetime_info()
+    )
+
+
 @app.post("/api/sessions")
 def create_session(request: SessionCreate):
     """Create a new chat session"""
+    # If system_prompt not provided, generate one automatically
+    system_prompt = request.system_prompt
+    if system_prompt is None:
+        system_prompt = generate_system_prompt(custom_instructions="")
+    
     session = session_manager.create_session(
         title=request.title,
-        system_prompt=request.system_prompt
+        system_prompt=system_prompt
     )
     return session.model_dump()
 
@@ -234,4 +288,4 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8009)

@@ -17,9 +17,12 @@ class SessionManager:
     
     def create_session(self, title: str = "New Chat", system_prompt: Optional[str] = None) -> Session:
         """Create a new session with system message"""
+        if system_prompt is None:
+            raise ValueError("system_prompt is required. Please generate a system prompt using the prompt generator first.")
+        
         session = Session(
             title=title,
-            system_prompt=system_prompt or "You are a helpful assistant with the ability to execute commands and access files on the local system. Use the available tools when needed to help the user."
+            system_prompt=system_prompt
         )
         # Add system message as first record
         system_record = MessageRecord(

@@ -44,7 +44,7 @@ class Session(BaseModel):
     records: List[Dict[str, Any]] = []  # List of MessageRecord or ToolCallRecord
     created_at: datetime = Field(default_factory=get_local_now)
     updated_at: datetime = Field(default_factory=get_local_now)
-    system_prompt: str = "You are a helpful assistant with the ability to execute commands and access files on the local system. Use the available tools when needed to help the user."
+    system_prompt: str  # Required field, must be provided when creating session
 
 
 # ============ API Request/Response Models ============
@@ -58,6 +58,19 @@ class ChatRequest(BaseModel):
 class SystemPromptUpdate(BaseModel):
     """System prompt update model"""
     system_prompt: str
+
+
+# ============ Prompt Generation Models ============
+
+class SystemPromptGenerateRequest(BaseModel):
+    """Request to generate a system prompt"""
+    custom_instructions: str = ""
+
+
+class SystemPromptGenerateResponse(BaseModel):
+    """Response containing generated system prompt"""
+    system_prompt: str
+    datetime_info: dict
 
 
 class SessionCreate(BaseModel):

@@ -20,6 +20,7 @@ class ShellSession:
         self._log: Deque[Dict[str, str]] = deque()
         self._output_event = threading.Event()
         self._lock = threading.Lock()
+        self._running_marker: Optional[str] = None  # Track if command is running
 
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
@@ -122,6 +123,41 @@ class ShellSession:
     def get_log(self) -> list:
         with self._lock:
             return list(self._log)
+    
+    def is_running(self) -> bool:
+        """Check if a command is currently running (marker not yet seen)"""
+        if self._running_marker is None:
+            return False
+        
+        # Check if marker is already in the buffered output
+        # This handles the case where command completed but we didn't wait long enough
+        with self._lock:
+            new_output = deque()
+            marker_found = False
+            for stream_name, line in self._output:
+                if self._running_marker in line:
+                    # Marker found in buffer, command has completed
+                    marker_found = True
+                    # Remove the marker line from output
+                    continue
+                new_output.append((stream_name, line))
+            
+            if marker_found:
+                self._output = new_output
+                self._running_marker = None
+                return False
+        
+        return True
+    
+    def set_running_marker(self, marker: str) -> None:
+        """Set the marker for currently running command"""
+        with self._lock:
+            self._running_marker = marker
+    
+    def clear_running_marker(self) -> None:
+        """Clear the running marker when command completes"""
+        with self._lock:
+            self._running_marker = None
 
 
 _shell_sessions: Dict[str, ShellSession] = {}
@@ -150,8 +186,18 @@ def _collect_output_until_marker(
         stderr_chunk = output.get("stderr", "")
 
         if marker in stdout_chunk:
-            stdout_chunk = stdout_chunk.split(marker)[0]
-            marker_found = True
+            # Remove the marker and everything after it (including the marker line)
+            lines = stdout_chunk.split('\n')
+            filtered_lines = []
+            for line in lines:
+                if marker in line:
+                    marker_found = True
+                    break
+                filtered_lines.append(line)
+            stdout_chunk = '\n'.join(filtered_lines)
+            # Add final newline if there were lines
+            if filtered_lines and stdout_chunk and not stdout_chunk.endswith('\n'):
+                stdout_chunk += '\n'
 
         if stdout_chunk:
             all_stdout.append(stdout_chunk)
@@ -159,6 +205,8 @@ def _collect_output_until_marker(
             all_stderr.append(stderr_chunk)
 
         if marker_found:
+            # Clear running marker when command completes
+            session.clear_running_marker()
             break
 
         if not stdout_chunk and not stderr_chunk:
@@ -288,23 +336,35 @@ class ShellRunTool(BaseTool):
         session_id = session_id or "default"
         session = _ensure_session(session_id, working_dir=working_dir)
 
+        # Check if session is already running a command
+        if session.is_running():
+            return {
+                "success": False,
+                "error": f"Session '{session_id}' is already running a command. Please wait for it to complete, use shell_read to check status, or start a new session to run another command.",
+                "session_id": session_id,
+            }
+
         if wait_ms is None:
             wait_ms = 10000 if background else 100000
 
         marker = f"__CMD_DONE_{uuid.uuid4().hex[:8]}__"
+        
+        # Mark session as running before executing command
+        session.set_running_marker(marker)
 
         session.write(command)
         session.write(f"echo {marker}")
 
         if background:
-            # For background mode, only wait if wait_ms is specified
-            if wait_ms and wait_ms > 0:
-                stdout, stderr, marker_found = _collect_output_until_marker(
-                    session, marker, wait_ms, max_chars
-                )
-                status = "completed" if marker_found else "running"
-            else:
-                stdout, stderr, status = "", "", "running"
+            # For background mode, wait for marker with a reasonable timeout
+            # If marker is found, command completed and marker will be cleared
+            # If marker is not found, command is still running, keep marker set
+            # (is_running() will check buffer for marker before rejecting new commands)
+            stdout, stderr, marker_found = _collect_output_until_marker(
+                session, marker, wait_ms, max_chars
+            )
+            
+            status = "completed" if marker_found else "running"
             
             return {
                 "success": True,

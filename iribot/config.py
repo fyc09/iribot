@@ -1,14 +1,25 @@
 """Configuration for the Agent Application"""
+import sys
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 from pathlib import Path
+import shutil
+
+
+_ENV_PATH = Path.cwd() / ".env"
+_ENV_EXAMPLE_PATH = Path(__file__).parent / ".env.example"
+
+if not _ENV_PATH.exists():
+    shutil.copyfile(_ENV_EXAMPLE_PATH, _ENV_PATH)
+    print(".env was missing, so .env.example has been copied. Please review and update .env with your own settings.")
+    sys.exit(1)
 
 
 class Settings(BaseSettings):
     """Application settings"""
     
     model_config = SettingsConfigDict(
-        env_file=Path(__file__).parent / ".env",
+        env_file=_ENV_PATH,
         case_sensitive=False,
         extra="ignore"
     )
@@ -26,7 +37,9 @@ class Settings(BaseSettings):
     bash_path: str = "bash"  # Path to bash executable, defaults to "bash" in PATH
     
     # CORS Configuration
-    cors_origins: list = ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173", "http://127.0.0.1:3000"]
+    cors_origins: list = []
+
+print(Settings.model_config)
 
 
 settings = Settings()

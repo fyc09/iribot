@@ -51,8 +51,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# Backend static build
+iribot/static/
+
 # Session and logs
-backend/sessions/
+sessions/
 skills/
 *.log
 *.pid

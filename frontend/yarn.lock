@@ -1491,11 +1491,6 @@ marked-highlight@^2.1.1:
   resolved "https://registry.npmjs.org/marked-highlight/-/marked-highlight-2.2.3.tgz"
   integrity sha512-FCfZRxW/msZAiasCML4isYpxyQWKEEx44vOgdn5Kloae+Qc3q4XR7WjpKKf8oMLk7JP9ZCRd2vhtclJFdwxlWQ==
 
-marked-katex@^0.3.8:
-  version "0.3.8"
-  resolved "https://registry.npmjs.org/marked-katex/-/marked-katex-0.3.8.tgz"
-  integrity sha512-YaIk/gaaAilSB0HKVetD+1VwkgauTX1kjFIpAsbrNdX2o/F6ja/3k9nufYjBmXIZX7yxVqzePBw4yFPh8dGOew==
-
 marked@^11.1.1, "marked@>=4 <18":
   version "11.2.0"
   resolved "https://registry.npmjs.org/marked/-/marked-11.2.0.tgz"

@@ -8,7 +8,7 @@ import uuid
 from collections import deque
 from typing import Any, Dict, Optional, Deque, Tuple, List
 from .base import BaseTool, BaseToolGroup, BaseStatus
-from config import settings
+from ..config import settings
 
 
 class ShellSession:

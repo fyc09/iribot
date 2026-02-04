@@ -3,7 +3,7 @@ from typing import Dict, Optional, List, Any
 from datetime import datetime
 import json
 from pathlib import Path
-from models import Session, MessageRecord
+from .models import Session, MessageRecord
 
 
 class SessionManager:

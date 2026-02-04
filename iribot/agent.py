@@ -3,8 +3,8 @@
 import json
 from typing import Optional, List, Dict, Any, Generator
 from openai import OpenAI
-from config import settings
-from executor import tool_executor
+from .config import settings
+from .executor import tool_executor
 
 
 class Agent:

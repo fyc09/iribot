@@ -1,11 +1,13 @@
 """Main FastAPI application"""
 import json
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from config import settings
-from models import (
+from .config import settings
+from .models import (
     SessionCreate,
     SystemPromptUpdate,
     ChatRequest,
@@ -14,10 +16,10 @@ from models import (
     SystemPromptGenerateRequest,
     SystemPromptGenerateResponse,
 )
-from session_manager import session_manager
-from agent import agent
-from executor import tool_executor
-from prompt_generator import generate_system_prompt
+from .session_manager import session_manager
+from .agent import agent
+from .executor import tool_executor
+from .prompt_generator import generate_system_prompt
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -47,7 +49,7 @@ def generate_prompt(request: SystemPromptGenerateRequest):
     Returns:
         Generated system prompt with metadata
     """
-    from prompt_generator import get_current_datetime_info
+    from .prompt_generator import get_current_datetime_info
     
     prompt = generate_system_prompt(
         custom_instructions=request.custom_instructions
@@ -70,7 +72,7 @@ def generate_prompt_get(custom_instructions: str = ""):
     Returns:
         Generated system prompt with metadata
     """
-    from prompt_generator import get_current_datetime_info
+    from .prompt_generator import get_current_datetime_info
     
     prompt = generate_system_prompt(
         custom_instructions=custom_instructions
@@ -284,6 +286,13 @@ def update_system_prompt(session_id: str, request: SystemPromptUpdate):
 def health_check():
     """Health check endpoint"""
     return {"status": "ok"}
+
+
+# Serve frontend static files
+static_dir = Path(__file__).parent / "static"
+static_dir.mkdir(parents=True, exist_ok=True)
+print(static_dir)
+app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,12 @@
 
 A full-featured AI agent application with tool calling capabilities and real-time conversation experience. Built with Python FastAPI backend + Vue 3 frontend full-stack architecture.
 
+## 📦 PyPI 发布与 CLI
+
+- 安装：pip install iribot
+- 运行：iribot --host 127.0.0.1 --port 8000
+- 构建：使用 Makefile（make build，会自动构建前端并打包到后端静态资源）
+
 ## ✨ Key Features
 
 ### 🤖 AI Agent Conversation
@@ -144,7 +150,7 @@ cd mybot
 #### 2. Backend Setup
 
 ```bash
-cd backend
+cd iribot
 
 # Create virtual environment (recommended)
 python -m venv venv
@@ -200,7 +206,7 @@ chmod +x setup.sh
 **Backend:**
 
 ```bash
-cd backend
+cd iribot
 uvicorn main:app --reload --port 8000
 ```
 
@@ -215,7 +221,7 @@ npm run dev
 
 ### Backend Configuration
 
-Configure in `backend/.env` file:
+Configure in `iribot/.env` file:
 
 | Config Item       | Description          | Default                |
 | ----------------- | -------------------- | ---------------------- |
@@ -263,7 +269,7 @@ export default {
 
 ### Adding New Tools
 
-1. Create a new tool file in the `backend/tools/` directory
+1. Create a new tool file in the `iribot/tools/` directory
 2. Inherit from `BaseTool` class:
 
 ```python

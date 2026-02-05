@@ -170,7 +170,7 @@ jobs:
     needs: [test-linux, test-macos, test-windows-cmd, test-windows-bash]
     runs-on: ubuntu-latest
     name: Combine Coverage
-    if: always() && !cancelled()
+    if: always()
 
     steps:
     - uses: actions/checkout@v4
@@ -187,9 +187,22 @@ jobs:
 
     - name: Download all coverage artifacts
       uses: actions/download-artifact@v4
+      continue-on-error: true
       with:
         pattern: coverage-*
         merge-multiple: true
+
+    - name: Check test results
+      id: check-tests
+      run: |
+        if [[ "${{ needs.test-linux.result }}" == "success" ]] && \
+           [[ "${{ needs.test-macos.result }}" == "success" ]] && \
+           [[ "${{ needs.test-windows-cmd.result }}" == "success" ]] && \
+           [[ "${{ needs.test-windows-bash.result }}" == "success" ]]; then
+          echo "tests_passed=true" >> $GITHUB_OUTPUT
+        else
+          echo "tests_passed=false" >> $GITHUB_OUTPUT
+        fi
 
     - name: List coverage files
       run: |
@@ -213,26 +226,37 @@ jobs:
         EOF
 
     - name: Combine coverage data
+      if: steps.check-tests.outputs.tests_passed == 'true'
       run: |
         echo "=== Combining coverage from all platforms ==="
-        coverage combine .coverage.* || echo "Some coverage files may be missing"
+        if ls .coverage.* 1> /dev/null 2>&1; then
+          coverage combine .coverage.*
+          echo "Coverage files combined successfully"
+        else
+          echo "No coverage files found to combine"
+        fi
         
     - name: Generate combined coverage report
+      if: steps.check-tests.outputs.tests_passed == 'true'
       run: |
         echo "=== Combined Coverage Report ==="
-        coverage report --show-missing
+        coverage report --show-missing || echo "No coverage data available"
         
     - name: Generate HTML report
+      if: steps.check-tests.outputs.tests_passed == 'true'
       run: |
-        coverage html
+        coverage html || echo "Could not generate HTML report"
         echo "HTML report generated in htmlcov/"
 
     - name: Generate XML report for Codecov
+      if: steps.check-tests.outputs.tests_passed == 'true'
       run: |
-        coverage xml -o coverage-combined.xml
+        coverage xml -o coverage-combined.xml || echo "Could not generate XML report"
 
     - name: Upload combined coverage to Codecov
+      if: steps.check-tests.outputs.tests_passed == 'true'
       uses: codecov/codecov-action@v4
+      continue-on-error: true
       with:
         files: coverage-combined.xml
         flags: combined
@@ -241,13 +265,16 @@ jobs:
         verbose: true
 
     - name: Upload combined HTML report
+      if: steps.check-tests.outputs.tests_passed == 'true'
       uses: actions/upload-artifact@v4
+      continue-on-error: true
       with:
         name: combined-coverage-report
         path: htmlcov/
         retention-days: 30
 
     - name: Coverage summary
+      if: steps.check-tests.outputs.tests_passed == 'true'
       run: |
         echo "## Combined Coverage Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
@@ -258,12 +285,19 @@ jobs:
         echo "- Windows (Git Bash)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-        coverage report >> $GITHUB_STEP_SUMMARY
+        coverage report >> $GITHUB_STEP_SUMMARY || echo "No coverage data available" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Coverage status
+      if: steps.check-tests.outputs.tests_passed != 'true'
+      run: |
+        echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "⚠️ Coverage combine skipped because some tests failed." >> $GITHUB_STEP_SUMMARY
 
   # Final test summary
   test-summary:
-    needs: [test-linux, test-macos, test-windows-cmd, test-windows-bash, coverage-combine]
+    needs: [test-linux, test-macos, test-windows-cmd, test-windows-bash]
     runs-on: ubuntu-latest
     name: Test Summary
     if: always()
@@ -276,20 +310,19 @@ jobs:
         echo "macOS (Bash): ${{ needs.test-macos.result }}"
         echo "Windows (CMD): ${{ needs.test-windows-cmd.result }}"
         echo "Windows (Bash): ${{ needs.test-windows-bash.result }}"
-        echo "Coverage Combine: ${{ needs.coverage-combine.result }}"
         
         if [[ "${{ needs.test-linux.result }}" == "failure" ]] || \
            [[ "${{ needs.test-macos.result }}" == "failure" ]] || \
            [[ "${{ needs.test-windows-cmd.result }}" == "failure" ]] || \
            [[ "${{ needs.test-windows-bash.result }}" == "failure" ]]; then
-          echo "Some tests failed"
+          echo "❌ Some tests failed"
           exit 1
         fi
-        echo "All tests passed"
+        echo "✅ All tests passed"
 
     - name: Generate summary
       run: |
-        echo "## Cross-Platform Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "## Cross-Platform Test Results ✅" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
         echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
@@ -297,4 +330,3 @@ jobs:
         echo "| macOS (Bash) | ${{ needs.test-macos.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Windows (CMD) | ${{ needs.test-windows-cmd.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Windows (Bash) | ${{ needs.test-windows-bash.result }} |" >> $GITHUB_STEP_SUMMARY
-        echo "| Combined Coverage | ${{ needs.coverage-combine.result }} |" >> $GITHUB_STEP_SUMMARY

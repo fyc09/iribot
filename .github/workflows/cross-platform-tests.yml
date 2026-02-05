@@ -54,7 +54,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-linux-py${{ matrix.python-version }}
-        path: .coverage.linux-py${{ matrix.python-version }}
+        path: ./.coverage.linux-py${{ matrix.python-version }}
         retention-days: 1
 
   test-macos:
@@ -103,7 +103,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-macos-py${{ matrix.python-version }}
-        path: .coverage.macos-py${{ matrix.python-version }}
+        path: ./.coverage.macos-py${{ matrix.python-version }}
         retention-days: 1
 
   test-windows-cmd:
@@ -153,7 +153,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-windows-cmd-py${{ matrix.python-version }}
-        path: .coverage.windows-cmd-py${{ matrix.python-version }}
+        path: ./.coverage.windows-cmd-py${{ matrix.python-version }}
         retention-days: 1
 
   test-windows-bash:
@@ -212,7 +212,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: coverage-windows-bash-py${{ matrix.python-version }}
-        path: .coverage.windows-bash-py${{ matrix.python-version }}
+        path: ./.coverage.windows-bash-py${{ matrix.python-version }}
         retention-days: 1
 
   # Combine coverage from all platforms
@@ -308,6 +308,7 @@ jobs:
       uses: codecov/codecov-action@v4
       continue-on-error: true
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
         files: coverage-combined.xml
         flags: combined
         name: combined-coverage

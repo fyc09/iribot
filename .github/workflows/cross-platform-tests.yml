@@ -50,6 +50,11 @@ jobs:
           exit 1
         fi
 
+    - name: Verify coverage file before upload
+      run: |
+        echo "=== Checking file before upload ==="
+        ls -la .coverage.linux-py${{ matrix.python-version }}
+
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v4
       with:
@@ -98,6 +103,11 @@ jobs:
           echo "ERROR: .coverage file not found after pytest"
           exit 1
         fi
+
+    - name: Verify coverage file before upload
+      run: |
+        echo "=== Checking file before upload ==="
+        ls -la .coverage.macos-py${{ matrix.python-version }}
 
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v4
@@ -148,6 +158,12 @@ jobs:
           Write-Host "ERROR: .coverage file not found"
           exit 1
         }
+
+    - name: Verify coverage file before upload
+      shell: powershell
+      run: |
+        Write-Host "=== Checking file before upload ==="
+        Get-ChildItem -Path ".coverage.windows-cmd-py${{ matrix.python-version }}" | Format-List
 
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v4
@@ -207,6 +223,12 @@ jobs:
           echo "ERROR: .coverage file not found after pytest"
           exit 1
         fi
+
+    - name: Verify coverage file before upload
+      shell: bash
+      run: |
+        echo "=== Checking file before upload ==="
+        ls -la .coverage.windows-bash-py${{ matrix.python-version }}
 
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v4

@@ -62,7 +62,6 @@ class Agent:
             model=self.model,
             messages=formatted_messages,
             tools=tools,
-            temperature=0.7,
             stream=True,
         )
 

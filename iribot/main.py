@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse
 from .config import settings
 from .models import (
     SessionCreate,
-    SystemPromptUpdate,
     ChatRequest,
     MessageRecord,
     ToolCallRecord,
@@ -104,18 +103,19 @@ def generate_prompt_text(custom_instructions: str = ""):
     return PlainTextResponse(content=prompt)
 
 
+@app.get("/api/prompt/current")
+def get_current_prompt():
+    """Get the current system prompt for viewing"""
+    from fastapi.responses import PlainTextResponse
+    
+    prompt = generate_system_prompt()
+    return PlainTextResponse(content=prompt)
+
+
 @app.post("/api/sessions")
 def create_session(request: SessionCreate):
     """Create a new chat session"""
-    # If system_prompt not provided, generate one automatically
-    system_prompt = request.system_prompt
-    if system_prompt is None:
-        system_prompt = generate_system_prompt(custom_instructions="")
-    
-    session = session_manager.create_session(
-        title=request.title,
-        system_prompt=system_prompt
-    )
+    session = session_manager.create_session(title=request.title)
     return session.model_dump()
 
 
@@ -186,9 +186,12 @@ def chat_stream(request: ChatRequest):
                 current_content = ""
                 tool_calls = []
                 
+                # Generate fresh system prompt for each request to include latest skills
+                fresh_system_prompt = generate_system_prompt()
+                
                 for chunk in agent.chat_stream(
-                    messages=messages[1:],
-                    system_prompt=session.system_prompt,
+                    messages=messages,
+                    system_prompt=fresh_system_prompt,
                     images=[bc.get("data") for bc in (request.binary_content or []) if bc.get("data")] if iteration == 0 else None
                 ):
                     if chunk["type"] == "content":
@@ -289,16 +292,6 @@ def chat_stream(request: ChatRequest):
             "X-Accel-Buffering": "no"
         }
     )
-
-
-# System prompt endpoints
-@app.post("/api/sessions/{session_id}/system-prompt")
-def update_system_prompt(session_id: str, request: SystemPromptUpdate):
-    """Update session system prompt"""
-    session = session_manager.update_system_prompt(session_id, request.system_prompt)
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return session.model_dump()
 
 
 # Health check

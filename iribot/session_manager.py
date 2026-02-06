@@ -15,22 +15,9 @@ class SessionManager:
         self.sessions: Dict[str, Session] = {}
         self._load_all_sessions()
     
-    def create_session(self, title: str = "New Chat", system_prompt: Optional[str] = None) -> Session:
-        """Create a new session with system message"""
-        if system_prompt is None:
-            raise ValueError("system_prompt is required. Please generate a system prompt using the prompt generator first.")
-        
-        session = Session(
-            title=title,
-            system_prompt=system_prompt
-        )
-        # Add system message as first record
-        system_record = MessageRecord(
-            role="system",
-            content=session.system_prompt
-        )
-        session.records.append(system_record.model_dump())
-        
+    def create_session(self, title: str = "New Chat") -> Session:
+        """Create a new session"""
+        session = Session(title=title)
         self.sessions[session.id] = session
         self._save_session(session)
         return session
@@ -79,21 +66,6 @@ class SessionManager:
         if session_file.exists():
             session_file.unlink()
         return True
-    
-    def update_system_prompt(self, session_id: str, system_prompt: str) -> Optional[Session]:
-        """Update session system prompt"""
-        session = self.sessions.get(session_id)
-        if not session:
-            return None
-        
-        session.system_prompt = system_prompt
-        # Update the system message record if it exists
-        if session.records and session.records[0].get("type") == "message" and session.records[0].get("role") == "system":
-            session.records[0]["content"] = system_prompt
-        
-        session.updated_at = datetime.now()
-        self._save_session(session)
-        return session
     
     def get_messages_for_llm(self, session_id: str) -> List[Dict[str, Any]]:
         """Extract messages in LLM-compatible format from session records"""

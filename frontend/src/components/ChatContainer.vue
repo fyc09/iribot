@@ -4,6 +4,9 @@
       <t-button theme="primary" variant="text" @click="openToolStatus">
         View tool status
       </t-button>
+      <t-button theme="primary" variant="text" @click="openSystemPrompt">
+        View system prompt
+      </t-button>
     </div>
     <ChatMessages :messages="messages" />
     <t-chat-sender
@@ -21,13 +24,24 @@
     >
       <ToolStatusPanel :tool-statuses="toolStatuses" @refresh="handleRefreshTools" />
     </t-dialog>
+    <t-dialog
+      v-model:visible="systemPromptVisible"
+      header="System Prompt"
+      width="800px"
+      :footer="false"
+    >
+      <pre class="system-prompt-content">{{ systemPromptContent }}</pre>
+    </t-dialog>
   </t-layout>
 </template>
 
 <script setup>
 import { ref } from "vue";
+import { MessagePlugin } from "tdesign-vue-next";
 import ChatMessages from "./ChatMessages.vue";
 import ToolStatusPanel from "./ToolStatusPanel.vue";
+
+const API_BASE = "/api";
 
 const props = defineProps({
   messages: {
@@ -46,6 +60,8 @@ const props = defineProps({
 
 const inputMessage = ref("");
 const toolStatusVisible = ref(false);
+const systemPromptVisible = ref(false);
+const systemPromptContent = ref("");
 const emits = defineEmits(["send", "stop", "refresh-tools"]);
 
 function handleSend(text) {
@@ -61,6 +77,17 @@ function handleStop() {
 
 function openToolStatus() {
   toolStatusVisible.value = true;
+}
+
+async function openSystemPrompt() {
+  try {
+    const response = await fetch(`${API_BASE}/prompt/current`);
+    if (!response.ok) throw new Error("Failed to load system prompt");
+    systemPromptContent.value = await response.text();
+    systemPromptVisible.value = true;
+  } catch (error) {
+    MessagePlugin.error(`Failed to load system prompt: ${error.message}`);
+  }
 }
 
 function handleRefreshTools() {
@@ -85,7 +112,20 @@ function handleRefreshTools() {
 
 .chat-toolbar {
   display: flex;
+  gap: 8px;
   justify-content: flex-end;
   margin-bottom: 8px;
+}
+
+.system-prompt-content {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 600px;
+  overflow-y: auto;
+  background: var(--td-bg-color-container);
+  padding: 16px;
+  border-radius: 4px;
 }
 </style>

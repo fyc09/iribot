@@ -44,7 +44,6 @@ class Session(BaseModel):
     records: List[Dict[str, Any]] = []  # List of MessageRecord or ToolCallRecord
     created_at: datetime = Field(default_factory=get_local_now)
     updated_at: datetime = Field(default_factory=get_local_now)
-    system_prompt: str  # Required field, must be provided when creating session
 
 
 # ============ API Request/Response Models ============

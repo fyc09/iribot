@@ -208,9 +208,9 @@ class TestShellTools:
 
         run_tool = ShellRunTool(get_outputs_dir())
         command = (
-            "python -c \"import subprocess, sys; "
+            "python -c \"import subprocess, sys, time; "
             "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-            "print(p.pid, flush=True)\""
+            "print(p.pid); sys.stdout.flush(); time.sleep(60)\""
         )
         result = run_tool.execute(
             session_id=shell_session_id,
@@ -218,21 +218,34 @@ class TestShellTools:
             wait_ms=5000,
         )
 
+        debug_context = (
+            "shell_stop_kills_child_process debug\n"
+            f"session_id={shell_session_id}\n"
+            f"command={command}\n"
+            f"success={result.get('success')} end_reason={result.get('end_reason')}\n"
+            f"stdout=\n{result.get('stdout', '')}\n"
+            f"stderr=\n{result.get('stderr', '')}\n"
+            f"output_path={result.get('output_path')}\n"
+        )
+
         pid_line = None
-        output_text = result.get("stdout", "") + result.get("stderr", "")
-        for line in output_text.splitlines():
+        for line in result.get("stdout", "").splitlines():
             if line.strip().isdigit():
                 pid_line = line.strip()
                 break
 
-        assert pid_line is not None
+        assert pid_line is not None, debug_context
         child_pid = int(pid_line)
-        assert is_pid_running(child_pid)
+        assert is_pid_running(child_pid), (
+            debug_context + f"child_pid={child_pid} not running after spawn\n"
+        )
 
         stop_tool = ShellStopTool()
         stop_tool.execute(session_id=shell_session_id)
 
-        assert wait_for_pid_exit(child_pid, timeout=5.0)
+        assert wait_for_pid_exit(child_pid, timeout=5.0), (
+            debug_context + f"child_pid={child_pid} did not exit after shell_stop\n"
+        )
 
     def test_shell_run_background_command(self, shell_session_id):
         """Test running command in background"""

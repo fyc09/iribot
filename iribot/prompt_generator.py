@@ -1,7 +1,7 @@
 """System Prompt Generator for Agent"""
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import List, Dict, Any
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
@@ -26,9 +26,12 @@ def get_current_datetime_info() -> Dict[str, str]:
     Returns:
         Dictionary containing formatted date/time/timezone
     """
-    # Get current UTC time
-    utc_now = datetime.now(ZoneInfo("UTC"))
-    
+    # Get current UTC time (fallback when tzdata is unavailable)
+    try:
+        utc_now = datetime.now(ZoneInfo("UTC"))
+    except (ZoneInfoNotFoundError, ModuleNotFoundError):
+        utc_now = datetime.now(timezone.utc)
+
     # Also get local timezone (system timezone)
     local_tz = datetime.now().astimezone().tzinfo
     local_now = datetime.now(local_tz)

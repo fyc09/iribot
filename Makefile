@@ -10,7 +10,7 @@ build: frontend package
 frontend: $(FRONTEND_STAMP)
 
 $(FRONTEND_STAMP): $(FRONTEND_SRC)
-	cd frontend && npm ci --include=optional && npm run build
+	cd frontend && npm install && npm run build
 	rm -rf iribot/static
 	mkdir -p iribot/static
 	cp -R frontend/dist/. iribot/static/

@@ -50,7 +50,7 @@ def test_skills_status_fallbacks(tmp_path, monkeypatch):
     skill = status["skills"][0]
     assert skill["name"] == "plain-skill"
     assert skill["title"] == "plain-skill"
-    assert "first paragraph" in skill["description"].lower()
+    assert "no yaml here" in skill["description"].lower()
 
 
 def test_skills_description_no_dir(tmp_path, monkeypatch):

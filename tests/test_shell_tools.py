@@ -3,6 +3,7 @@ import pytest
 import time
 import platform
 import subprocess
+import re
 from pathlib import Path
 from iribot.tools.execute_command import (
     ShellStartTool,
@@ -208,9 +209,9 @@ class TestShellTools:
 
         run_tool = ShellRunTool(get_outputs_dir())
         command = (
-            "python -c \"import subprocess, sys; "
+            "python -c \"import subprocess, sys, time; "
             "p = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)']); "
-            "print(p.pid, flush=True)\""
+            "print(p.pid); sys.stdout.flush(); time.sleep(60)\""
         )
         result = run_tool.execute(
             session_id=shell_session_id,
@@ -218,15 +219,10 @@ class TestShellTools:
             wait_ms=5000,
         )
 
-        pid_line = None
-        output_text = result.get("stdout", "") + result.get("stderr", "")
-        for line in output_text.splitlines():
-            if line.strip().isdigit():
-                pid_line = line.strip()
-                break
-
-        assert pid_line is not None
-        child_pid = int(pid_line)
+        stdout_text = result.get("stdout", "")
+        pid_matches = re.findall(r"\b(\d+)\b", stdout_text)
+        assert pid_matches
+        child_pid = int(pid_matches[-1])
         assert is_pid_running(child_pid)
 
         stop_tool = ShellStopTool()

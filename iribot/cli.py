@@ -9,7 +9,7 @@ import uvicorn
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the IriBot backend server")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind")
+    parser.add_argument("--port", type=int, default=8009, help="Port to bind")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
     parser.add_argument(
         "--log-level",
@@ -21,7 +21,7 @@ def main() -> None:
     args = parser.parse_args()
 
     uvicorn.run(
-        "iribot.main:app",
+        "iribot.service:app",
         host=args.host,
         port=args.port,
         reload=args.reload,

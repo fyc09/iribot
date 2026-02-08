@@ -6,6 +6,7 @@ A full-featured AI agent application with tool calling capabilities and real-tim
 
 - Install: `pip install iridet-bot`
 - Find an empty directory for the agent, and run: `iribot`
+- Fill out `.env`, then run `iribot` again.
 - To specify host and port: `iribot --host 0.0.0.0 --port 8080`
 - (Optional, Recommended) Copy some skills to `skills` directory
 
@@ -13,14 +14,13 @@ A full-featured AI agent application with tool calling capabilities and real-tim
 
 ### 🤖 AI Agent Conversation
 
-- Intelligent conversation powered by OpenAI API
-- Streaming response support for real-time AI replies
-- Image input support (vision capabilities)
-- Customizable system prompts
+- Streaming responses for real-time replies (SSE)
+- Image input support (vision-capable models)
+- System prompt generation with current time and available tools/skills
 
 ### 🛠️ Tool Calling System
 
-The agent can autonomously call the following tools to complete tasks:
+The agent can autonomously call tools to complete tasks:
 
 - **File Operations**
   - `read_file` - Read file contents
@@ -34,19 +34,19 @@ The agent can autonomously call the following tools to complete tasks:
   - `shell_write` - Write input to shell
   - `shell_stop` - Stop shell session
 
+- **Skills**
+  - `use_skill` - Load skill instructions from `skills/*/SKILL.md`
+
 ### 💬 Session Management
 
-- Multi-session support, create multiple independent conversations
-- Persistent session history storage
+- Multi-session support with persistent history (stored under `./sessions`)
 - Session list management (create, switch, delete)
-- Independent system prompts for each session
 
-### 🎨 Modern UI
+### 🎨 Frontend Experience
 
-- Beautiful interface based on TDesign component library
-- Real-time tool call status display
-- Markdown message rendering support
-- Responsive design for different screen sizes
+- UI built on TDesign + @tdesign-vue-next/chat
+- Markdown rendering and KaTeX math support
+- Tool call status display in chat
 
 ## 🏗️ System Architecture
 
@@ -131,15 +131,31 @@ sequenceDiagram
     end
 ```
 
-## 🚀 Quick Start
+## 🚀 Install from Source
 
 ### Requirements
 
-- Python 3.8+
+- Python 3.9+
 - Node.js 16+
 - OpenAI API Key (or compatible LLM service)
 
-### Installation
+### Option A: Install from PyPI
+
+```bash
+pip install iridet-bot
+```
+
+Run the server in an empty working directory:
+
+```bash
+iribot
+```
+
+On first run, the app copies `iribot/.env.example` into your current working directory as `.env` and exits. Edit `.env`, then run `iribot` again.
+
+Open `http://localhost:8000` in your browser. The backend serves the bundled UI from the static assets directory.
+
+### Option B: Local Development
 
 #### 1. Clone the Repository
 
@@ -151,103 +167,54 @@ cd mybot
 #### 2. Backend Setup
 
 ```bash
-cd iribot
-
 # Create virtual environment (recommended)
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -e .
 
-# Configure environment variables
-cp .env.example .env
+# Initialize .env
+cp iribot/.env.example .env  # Windows: copy iribot\.env.example .env
 # Edit .env file and add your OpenAI API Key
 ```
 
-`.env` configuration example:
-
-```ini
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-OPENAI_MODEL=gpt-4-turbo-preview
-# OPENAI_BASE_URL=https://api.openai.com/v1  # Optional, use custom API endpoint
-DEBUG=false
-```
-
-#### 3. Frontend Setup
+#### 3. Frontend Setup (Vite Dev Server)
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-```
-
-#### 4. Start Services
-
-##### Using Automated Scripts (Recommended)
-
-**Windows:**
-
-```bash
-# In project root directory
-./setup.bat
-```
-
-**Linux/macOS:**
-
-```bash
-# In project root directory
-chmod +x setup.sh
-./setup.sh
-```
-
-##### Manual Start
-
-**Backend:**
-
-```bash
-cd iribot
-uvicorn main:app --reload --port 8000
-```
-
-**Frontend:**
-
-```bash
-cd frontend
 npm run dev
 ```
+
+By default, the dev server runs on port `3009` and proxies `/api` to `http://localhost:8009`.
+
+#### 4. Start Backend
+
+```bash
+iribot --reload --port 8009
+```
+
+If you prefer port `8000`, update `frontend/vite.config.js` to point to `http://localhost:8000`.
 
 ## 🔧 Configuration
 
 ### Backend Configuration
 
-Configure in `iribot/.env` file:
+Configuration is read from `.env` in your current working directory.
 
-| Config Item       | Description          | Default                |
-| ----------------- | -------------------- | ---------------------- |
-| `OPENAI_API_KEY`  | OpenAI API key       | Required               |
-| `OPENAI_MODEL`    | Model to use         | `gpt-4-vision-preview` |
-| `OPENAI_BASE_URL` | Custom API endpoint  | Empty (use official)   |
-| `DEBUG`           | Debug mode           | `false`                |
-| `BASH_PATH`       | Bash executable path | `bash`                 |
+| Config Item       | Description                        | Default                |
+| ----------------- | ---------------------------------- | ---------------------- |
+| `OPENAI_API_KEY`  | OpenAI API key                     | Required               |
+| `OPENAI_MODEL`    | Model to use                       | `gpt-4-vision-preview` |
+| `OPENAI_BASE_URL` | Custom API endpoint                | Empty (use official)   |
+| `DEBUG`           | Debug mode                         | `false`                |
+| `SHELL_TYPE`      | Shell type (`auto`, `bash`, `cmd`) | `auto`                 |
+| `BASH_PATH`       | Bash executable path               | `bash`                 |
 
 ### Frontend Configuration
 
-Frontend connects to backend via Vite proxy. Configuration file: `frontend/vite.config.js`
-
-```javascript
-export default {
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:8000",
-        changeOrigin: true,
-      },
-    },
-  },
-};
-```
+Frontend connects to backend via Vite proxy. Configure in `frontend/vite.config.js`.
 
 ## 🔌 API Endpoints
 
@@ -265,6 +232,17 @@ export default {
 ### Tool Status
 
 - `GET /api/tools/status` - Get all tool statuses
+
+### Prompt Generation
+
+- `POST /api/prompt/generate` - Generate system prompt (JSON)
+- `GET /api/prompt/generate` - Generate system prompt (JSON)
+- `GET /api/prompt/text` - Generate system prompt (plain text)
+- `GET /api/prompt/current` - Get current system prompt (plain text)
+
+### Health
+
+- `GET /api/health` - Health check
 
 ## 🛠️ Extension Development
 
@@ -316,7 +294,7 @@ def _register_default_tools(self):
 
 ### Adding New Frontend Components
 
-Add tool call visualization components in the `frontend/src/components/tool-calls/` directory.
+Add new UI components under `frontend/src/components/`.
 
 ## 📝 Tech Stack
 
@@ -330,9 +308,11 @@ Add tool call visualization components in the `frontend/src/components/tool-call
 ### Frontend
 
 - **Vue 3** - Progressive JavaScript framework
-- **TDesign** - Enterprise-level UI component library
-- **Vite** - Next-generation frontend build tool
+- **TDesign** - UI component library
+- **@tdesign-vue-next/chat** - Chat UI components
+- **Vite** - Frontend build tool
 - **Marked** - Markdown parser
+- **KaTeX** - Math rendering
 
 ## 🤝 Contributing
 

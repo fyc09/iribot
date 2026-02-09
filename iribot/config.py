@@ -40,5 +40,8 @@ class Settings(BaseSettings):
     # CORS Configuration
     cors_origins: list = []
 
+    # Tool History Configuration
+    tool_history_rounds: int = 10  # Number of rounds after which tool call details are truncated (only tool names are kept)
+
 
 settings = Settings()

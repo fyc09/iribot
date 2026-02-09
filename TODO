@@ -1,8 +1,11 @@
-1. <DONE> 修复 linux 上当返回的内容结尾没有换行时无法正确获得结果
-2. <DONE> 添加 Windows CMD 支持
-3. <SUSPENDED> 可视化配置界面
-4. <DONE> 添加 Agent Skills
-5. prompt 优化
-6. <DONE> 编写 pytest，用于测试 tools，并编写 workflow 在各个平台自动运行（bash on Linux/MacOS, cmd on Windows, bash on Windows）
-7. <DONE> 自动结束shell的子进程
-8. 文件上传下载
+1.  <DONE> 修复 linux 上当返回的内容结尾没有换行时无法正确获得结果
+2.  <DONE> 添加 Windows CMD 支持
+3.  <SUSPENDED> 可视化配置界面
+4.  <DONE> 添加 Agent Skills
+5.  <DONE> prompt 优化
+6.  <DONE> 编写 pytest，用于测试 tools，并编写 workflow 在各个平台自动运行（bash on Linux/MacOS, cmd on Windows, bash on Windows）
+7.  <DONE> 自动结束shell的子进程
+8.  文件上传下载
+9.  <DONE> token 减少计划
+10. 对接现有聊天平台
+11. 自动总结生成标题

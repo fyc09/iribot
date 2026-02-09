@@ -184,14 +184,15 @@ def chat_stream(request: ChatRequest):
         # Send user record event
         yield f"data: {json.dumps({'type': 'record', 'record': user_record.model_dump()}, default=str)}\n\n"
         
-        # Get messages for LLM
-        messages = session_manager.get_messages_for_llm(request.session_id)
-        
         try:
             # Tool calling loop
             max_iterations = 50
             
             for iteration in range(max_iterations):
+                # Re-fetch messages from session (with truncation applied each time)
+                # This ensures older tool calls are truncated as more calls are made
+                messages = session_manager.get_messages_for_llm(request.session_id)
+                
                 # Stream AI response
                 current_content = ""
                 tool_calls = []

@@ -4,6 +4,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 from .models import Session, MessageRecord
+from .config import settings
 
 
 class SessionManager:
@@ -73,7 +74,16 @@ class SessionManager:
         if not session:
             return []
         
+        # First pass: count total tool calls
+        total_tool_calls = sum(1 for r in session.records if r.get("type") == "tool_call")
+        tool_history_rounds = settings.tool_history_rounds
+        
+        # Calculate the threshold: tool calls with index <= threshold should be truncated
+        # We keep the most recent `tool_history_rounds` tool calls
+        truncation_threshold = total_tool_calls - tool_history_rounds
+        
         messages = []
+        tool_call_index = 0
         
         for record in session.records:
             if record.get("type") == "message":
@@ -87,6 +97,11 @@ class SessionManager:
                     messages.append({"role": "assistant", "content": content})
             
             elif record.get("type") == "tool_call":
+                tool_call_index += 1
+                # Determine if we should truncate this tool call
+                # Truncate if this is an older tool call (index <= threshold)
+                should_truncate = tool_call_index <= truncation_threshold
+                
                 # Add tool call to assistant message and tool result
                 tool_call_id = record.get("tool_call_id")
                 tool_name = record.get("tool_name")
@@ -97,21 +112,39 @@ class SessionManager:
                 if messages and messages[-1]["role"] == "assistant":
                     if "tool_calls" not in messages[-1]:
                         messages[-1]["tool_calls"] = []
-                    messages[-1]["tool_calls"].append({
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments)
-                        }
-                    })
-                
-                # Add tool result message
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "content": json.dumps(result) if isinstance(result, dict) else str(result)
-                })
+                    
+                    if should_truncate:
+                        # Only keep tool name, replace arguments and result with placeholder
+                        messages[-1]["tool_calls"].append({
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": "{}"
+                            }
+                        })
+                        # Truncated tool result
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": "[Tool call details truncated]"
+                        })
+                    else:
+                        # Full tool call info
+                        messages[-1]["tool_calls"].append({
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments)
+                            }
+                        })
+                        # Full tool result
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": json.dumps(result) if isinstance(result, dict) else str(result)
+                        })
         
         return messages
     

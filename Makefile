@@ -3,7 +3,7 @@ SHELL := /bin/bash
 FRONTEND_SRC := $(shell find frontend/src -type f) frontend/index.html frontend/vite.config.js frontend/package.json
 FRONTEND_STAMP := iribot/static/.built
 
-.PHONY: build frontend package clean install uninstall test test-cov test-html
+.PHONY: build frontend package clean install test test-cov test-html lint lint-fix
 
 build: frontend package
 
@@ -30,6 +30,12 @@ uninstall:
 
 clean:
 	rm -rf dist build *.egg-info iribot/static htmlcov .coverage .coverage.* .pytest_cache
+
+lint:
+	ruff check iribot/
+
+lint-fix:
+	ruff check iribot/ --fix
 
 # Testing
 test:

@@ -2,8 +2,11 @@
 
 import json
 import logging
-from typing import Optional, List, Dict, Any, Generator
+from collections.abc import Generator
+from typing import Any
+
 from openai import OpenAI
+
 from .config import settings
 from .executor import tool_executor
 
@@ -23,10 +26,10 @@ class Agent:
 
     def chat_stream(
         self,
-        messages: List[Dict[str, Any]],
+        messages: list[dict[str, Any]],
         system_prompt: str,
-        images: Optional[List[str]] = None,
-    ) -> Generator[Dict[str, Any], None, None]:
+        images: list[str] | None = None,
+    ) -> Generator[dict[str, Any]]:
         """
         Send a message to the LLM and stream the response
 
@@ -42,14 +45,14 @@ class Agent:
             content = [{"type": "text", "text": last_msg.get("content", "")}]
 
             for image_base64 in images:
-                content.append(
+                content.extend([
                     {
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:image/jpeg;base64,{image_base64}"
                         },
                     }
-                )
+                ])
 
             last_msg["content"] = content
             formatted_messages.extend(messages[:-1])
@@ -149,8 +152,8 @@ class Agent:
         self,
         tool_name: str,
         arguments: str,
-        context: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Process a tool call from the LLM
 
@@ -163,9 +166,8 @@ class Agent:
         """
         try:
             args = json.loads(arguments) if arguments else {}
-            if tool_name.startswith("shell_") and context:
-                if "session_id" not in args and context.get("session_id"):
-                    args["session_id"] = context["session_id"]
+            if tool_name.startswith("shell_") and context and "session_id" not in args and context.get("session_id"):
+                args["session_id"] = context["session_id"]
             result = tool_executor.execute_tool(tool_name, **args)
             return {"success": True, "result": result}
         except json.JSONDecodeError:

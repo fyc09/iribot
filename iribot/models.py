@@ -1,6 +1,7 @@
 """Data models for the Agent application"""
-from typing import Optional, List, Dict, Any, Literal, Union
 from datetime import datetime
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -16,7 +17,7 @@ class MessageRecord(BaseModel):
     type: Literal["message"] = "message"
     role: Literal["system", "user", "assistant"]
     content: str
-    binary_content: Optional[List[Dict[str, Any]]] = None  # Images, files, etc.
+    binary_content: list[dict[str, Any]] | None = None  # Images, files, etc.
     timestamp: datetime = Field(default_factory=get_local_now)
 
 
@@ -25,14 +26,14 @@ class ToolCallRecord(BaseModel):
     type: Literal["tool_call"] = "tool_call"
     tool_call_id: str
     tool_name: str
-    arguments: Dict[str, Any]
+    arguments: dict[str, Any]
     result: Any
     success: bool
     timestamp: datetime = Field(default_factory=get_local_now)
 
 
 # Union type for session records
-SessionRecord = Union[MessageRecord, ToolCallRecord]
+SessionRecord = MessageRecord | ToolCallRecord
 
 
 # ============ Session Model ============
@@ -41,7 +42,7 @@ class Session(BaseModel):
     """Session model with unified record list"""
     id: str = Field(default_factory=lambda: str(datetime.now().timestamp()))
     title: str
-    records: List[Dict[str, Any]] = []  # List of MessageRecord or ToolCallRecord
+    records: list[dict[str, Any]] = []  # List of MessageRecord or ToolCallRecord
     created_at: datetime = Field(default_factory=get_local_now)
     updated_at: datetime = Field(default_factory=get_local_now)
 
@@ -52,7 +53,7 @@ class ChatRequest(BaseModel):
     """Chat request model"""
     session_id: str
     message: str
-    binary_content: Optional[List[Dict[str, Any]]] = None
+    binary_content: list[dict[str, Any]] | None = None
 
 class SystemPromptUpdate(BaseModel):
     """System prompt update model"""
@@ -75,4 +76,4 @@ class SystemPromptGenerateResponse(BaseModel):
 class SessionCreate(BaseModel):
     """Create new session request"""
     title: str = "New Chat"
-    system_prompt: Optional[str] = None
+    system_prompt: str | None = None

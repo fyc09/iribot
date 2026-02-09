@@ -8,6 +8,25 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+
+    - name: Install ruff
+      run: |
+        pip install ruff
+
+    - name: Run lint
+      run: |
+        ruff check iribot/
+
   test-linux:
     runs-on: ubuntu-latest
     name: Test Linux (Bash) - Python ${{ matrix.python-version }}
@@ -328,7 +347,7 @@ jobs:
 
   # Final test summary
   test-summary:
-    needs: [test-linux, test-macos, test-windows-cmd, test-windows-bash]
+    needs: [lint, test-linux, test-macos, test-windows-cmd, test-windows-bash]
     runs-on: ubuntu-latest
     name: Test Summary
     if: always()
@@ -337,11 +356,16 @@ jobs:
     - name: Check test results
       run: |
         echo "=== Cross-Platform Test Summary ==="
+        echo "Lint: ${{ needs.lint.result }}"
         echo "Linux (Bash): ${{ needs.test-linux.result }}"
         echo "macOS (Bash): ${{ needs.test-macos.result }}"
         echo "Windows (CMD): ${{ needs.test-windows-cmd.result }}"
         echo "Windows (Bash): ${{ needs.test-windows-bash.result }}"
         
+        if [[ "${{ needs.lint.result }}" == "failure" ]]; then
+          echo "❌ Lint failed"
+          exit 1
+        fi
         if [[ "${{ needs.test-linux.result }}" == "failure" ]] || \
            [[ "${{ needs.test-macos.result }}" == "failure" ]] || \
            [[ "${{ needs.test-windows-cmd.result }}" == "failure" ]] || \
@@ -349,14 +373,15 @@ jobs:
           echo "❌ Some tests failed"
           exit 1
         fi
-        echo "✅ All tests passed"
+        echo "✅ All checks passed"
 
     - name: Generate summary
       run: |
         echo "## Cross-Platform Test Results ✅" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-        echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Linux (Bash) | ${{ needs.test-linux.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| macOS (Bash) | ${{ needs.test-macos.result }} |" >> $GITHUB_STEP_SUMMARY
         echo "| Windows (CMD) | ${{ needs.test-windows-cmd.result }} |" >> $GITHUB_STEP_SUMMARY

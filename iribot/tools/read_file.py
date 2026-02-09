@@ -1,21 +1,22 @@
 """Read file tool"""
-from typing import Any, Dict
+from typing import Any
+
 from .base import BaseTool
 
 
 class ReadFileTool(BaseTool):
     """Read content from files"""
-    
+
     @property
     def name(self) -> str:
         return "read_file"
-    
+
     @property
     def description(self) -> str:
         return "Read content from a file"
-    
+
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -26,11 +27,11 @@ class ReadFileTool(BaseTool):
             },
             "required": ["file_path"]
         }
-    
-    def execute(self, file_path: str) -> Dict[str, Any]:
+
+    def execute(self, file_path: str) -> dict[str, Any]:
         """Read file content"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, encoding='utf-8') as f:
                 content = f.read()
             return {
                 "success": True,

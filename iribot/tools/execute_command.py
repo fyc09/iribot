@@ -1,18 +1,18 @@
 """Execute command tool with interactive shell sessions"""
 import os
-import subprocess
 import platform
+import shutil
 import signal
+import subprocess
 import threading
 import time
 import uuid
-import shutil
-from pathlib import Path
 from collections import deque
-from typing import Any, Dict, Optional, Deque, Tuple, List
-from .base import BaseTool, BaseToolGroup, BaseStatus
-from ..config import settings
+from pathlib import Path
+from typing import Any
 
+from ..config import settings
+from .base import BaseStatus, BaseTool, BaseToolGroup
 
 MAX_INLINE_OUTPUT_CHARS = 1000
 OUTPUT_HINT = (
@@ -33,32 +33,32 @@ def _detect_shell_type() -> str:
     bash_path = shutil.which("bash")
     if bash_path:
         return "bash"
-    
+
     # Fall back to cmd on Windows
     if platform.system() == "Windows":
         return "cmd"
-    
+
     # Fall back to sh on Unix-like systems
     sh_path = shutil.which("sh")
     if sh_path:
         return "sh"
-    
+
     # Default to bash
     return "bash"
 
 
-def _get_shell_config() -> Tuple[str, List[str]]:
+def _get_shell_config() -> tuple[str, list[str]]:
     """Get shell executable and arguments based on configuration.
-    
+
     Returns:
         Tuple of (executable_path, command_args_list)
     """
     shell_type = settings.shell_type
-    
+
     # Auto-detect if shell_type is "auto"
     if shell_type == "auto":
         shell_type = _detect_shell_type()
-    
+
     if shell_type == "cmd":
         # Windows CMD
         return "cmd.exe", ["/Q"]  # /Q disables echo
@@ -84,29 +84,29 @@ def _get_shell_config() -> Tuple[str, List[str]]:
 class ShellSession:
     """Persistent shell session with async output capture"""
 
-    def __init__(self, working_dir: Optional[str] = None):
+    def __init__(self, working_dir: str | None = None):
         self.working_dir = working_dir
-        self._output: Deque[Tuple[str, str]] = deque()
-        self._log: Deque[Dict[str, str]] = deque()
+        self._output: deque[tuple[str, str]] = deque()
+        self._log: deque[dict[str, str]] = deque()
         self._output_event = threading.Event()
         self._lock = threading.Lock()
-        self._running_marker: Optional[str] = None  # Track if command is running
+        self._running_marker: str | None = None  # Track if command is running
 
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
-        
+
         # Use UTF-8 encoding for both Windows and Unix
         # Git Bash and Python both support UTF-8 well
-        
+
         # Disable colors and set simple terminal to avoid ANSI escape sequences
         env["TERM"] = "dumb"
         env["PS1"] = "$ "  # Simple prompt without colors
         env["NO_COLOR"] = "1"  # Disable colors in many tools
         env["PYTHONUNBUFFERED"] = "1"  # Disable Python output buffering
-        
+
         # Get shell executable and arguments
         shell_exe, shell_args = _get_shell_config()
-        cmd = [shell_exe] + shell_args
+        cmd = [shell_exe, *shell_args]
 
         self.process = subprocess.Popen(
             cmd,
@@ -147,10 +147,10 @@ class ShellSession:
                                 self._output.append((stream_name, text))
                                 self._log.append({"stream": stream_name, "data": text})
                                 self._output_event.set()
-                        except:
+                        except Exception:
                             pass
                     break
-                
+
                 buffer += byte
                 # Flush buffer when encountering newline or reaching max size
                 if byte == b'\n' or len(buffer) >= 1024:
@@ -161,7 +161,7 @@ class ShellSession:
                             self._log.append({"stream": stream_name, "data": text})
                             self._output_event.set()
                         buffer = b""
-                    except:
+                    except Exception:
                         buffer = b""
         except Exception:
             pass
@@ -181,7 +181,7 @@ class ShellSession:
         self.process.stdin.write(data.encode('utf-8'))
         self.process.stdin.flush()
 
-    def read(self, wait_ms: int = 0, max_chars: int = 20000) -> Dict[str, Any]:
+    def read(self, wait_ms: int = 0, max_chars: int = 20000) -> dict[str, Any]:
         output = []
         stderr = []
 
@@ -244,12 +244,12 @@ class ShellSession:
     def get_log(self) -> list:
         with self._lock:
             return list(self._log)
-    
+
     def is_running(self) -> bool:
         """Check if a command is currently running (marker not yet seen)"""
         if self._running_marker is None:
             return False
-        
+
         # Check if marker is already in the buffered stdout
         # This handles the case where command completed but we didn't wait long enough
         with self._lock:
@@ -281,21 +281,21 @@ class ShellSession:
                 self._output = new_output
                 self._running_marker = None
                 return False
-        
+
         return True
-    
+
     def set_running_marker(self, marker: str) -> None:
         """Set the marker for currently running command"""
         with self._lock:
             self._running_marker = marker
-    
+
     def clear_running_marker(self) -> None:
         """Clear the running marker when command completes"""
         with self._lock:
             self._running_marker = None
 
 
-_shell_sessions: Dict[str, ShellSession] = {}
+_shell_sessions: dict[str, ShellSession] = {}
 
 
 def stop_all_shell_sessions() -> None:
@@ -351,10 +351,10 @@ def _collect_output_until_marker(
     marker: str,
     wait_ms: int,
     max_chars: int,
-) -> Tuple[str, str, bool, bool]:
+) -> tuple[str, str, bool, bool]:
     """
     Collect output from session until marker is found or timeout.
-    
+
     Returns: (stdout, stderr, marker_found, timed_out)
     """
     max_wait_time = wait_ms if wait_ms > 0 else 100000
@@ -399,7 +399,7 @@ def _collect_output_until_marker(
     return "".join(all_stdout), "".join(all_stderr), marker_found, timed_out
 
 
-def _ensure_session(session_id: str, working_dir: Optional[str] = None) -> ShellSession:
+def _ensure_session(session_id: str, working_dir: str | None = None) -> ShellSession:
     if session_id not in _shell_sessions or not _shell_sessions[session_id].is_alive():
         _shell_sessions[session_id] = ShellSession(working_dir=working_dir)
         if working_dir:
@@ -407,7 +407,7 @@ def _ensure_session(session_id: str, working_dir: Optional[str] = None) -> Shell
     return _shell_sessions[session_id]
 
 
-def _get_sessions_status() -> List[Dict[str, Any]]:
+def _get_sessions_status() -> list[dict[str, Any]]:
     sessions = []
     for session_id, session in _shell_sessions.items():
         sessions.append({
@@ -429,10 +429,13 @@ class ShellStartTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Start a persistent shell session. On Windows, uses cmd.exe if bash is unavailable; on Unix-like systems, uses bash or sh."
+        return (
+            "Start a persistent shell session. On Windows, uses cmd.exe if bash is "
+            "unavailable; on Unix-like systems, uses bash or sh."
+        )
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -450,9 +453,9 @@ class ShellStartTool(BaseTool):
 
     def execute(
         self,
-        session_id: Optional[str] = None,
-        working_dir: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        session_id: str | None = None,
+        working_dir: str | None = None,
+    ) -> dict[str, Any]:
         session_id = session_id or "default"
         _ensure_session(session_id, working_dir=working_dir)
         return {
@@ -477,7 +480,7 @@ class ShellRunTool(BaseTool):
         return "Run a command in a persistent shell session (bash or cmd)."
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -509,11 +512,11 @@ class ShellRunTool(BaseTool):
     def execute(
         self,
         command: str,
-        session_id: Optional[str] = None,
-        wait_ms: Optional[int] = None,
+        session_id: str | None = None,
+        wait_ms: int | None = None,
         max_chars: int = 20000,
-        working_dir: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        working_dir: str | None = None,
+    ) -> dict[str, Any]:
         session_id = session_id or "default"
         session = _ensure_session(session_id, working_dir=working_dir)
 
@@ -521,7 +524,11 @@ class ShellRunTool(BaseTool):
         if session.is_running():
             return {
                 "success": False,
-                "error": f"Session '{session_id}' is already running a command. Please wait for it to complete, use shell_read to check status, or start a new session to run another command.",
+                "error": (
+                    f"Session '{session_id}' is already running a command. Please wait for "
+                    "it to complete, use shell_read to check status, or start a new session "
+                    "to run another command."
+                ),
                 "session_id": session_id,
             }
 
@@ -536,7 +543,7 @@ class ShellRunTool(BaseTool):
             wait_ms = 3000
 
         marker = f"__CMD_DONE_{uuid.uuid4().hex[:8]}__"
-        
+
         # Mark session as running before executing command
         session.set_running_marker(marker)
 
@@ -612,7 +619,7 @@ class ShellWriteTool(BaseTool):
         return "Write input to stdin of a persistent shell session (bash or cmd)."
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -620,7 +627,7 @@ class ShellWriteTool(BaseTool):
                     "type": "string",
                     "description": "Session/agent identifier for persistent shell",
                 },
-                "input": {
+                "shell_input": {
                     "type": "string",
                     "description": "Input to write to stdin",
                 },
@@ -629,18 +636,18 @@ class ShellWriteTool(BaseTool):
                     "description": "Working directory to start shell (optional)",
                 },
             },
-            "required": ["input"],
+            "required": ["shell_input"],
         }
 
     def execute(
         self,
-        input: str,
-        session_id: Optional[str] = None,
-        working_dir: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        shell_input: str,
+        session_id: str | None = None,
+        working_dir: str | None = None,
+    ) -> dict[str, Any]:
         session_id = session_id or "default"
         session = _ensure_session(session_id, working_dir=working_dir)
-        session.write(input)
+        session.write(shell_input)
         return {
             "success": True,
             "session_id": session_id,
@@ -662,7 +669,7 @@ class ShellReadTool(BaseTool):
         return "Read buffered output from a persistent shell session (bash or cmd)."
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -690,10 +697,10 @@ class ShellReadTool(BaseTool):
     def execute(
         self,
         wait_ms: int,
-        session_id: Optional[str] = None,
+        session_id: str | None = None,
         max_chars: int = 20000,
-        working_dir: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        working_dir: str | None = None,
+    ) -> dict[str, Any]:
         session_id = session_id or "default"
         session = _ensure_session(session_id, working_dir=working_dir)
         if wait_ms < 3000:
@@ -740,7 +747,7 @@ class ShellStopTool(BaseTool):
         return "Stop a persistent shell session (bash or cmd)."
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
@@ -752,7 +759,7 @@ class ShellStopTool(BaseTool):
             "required": [],
         }
 
-    def execute(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+    def execute(self, session_id: str | None = None) -> dict[str, Any]:
         session_id = session_id or "default"
         session = _shell_sessions.get(session_id)
         if not session or not session.is_alive():
@@ -783,7 +790,7 @@ class ShellToolGroup(BaseToolGroup):
     def description(self) -> str:
         return "Persistent shell tools (bash or cmd depending on system availability)."
 
-    def get_tools(self) -> List[BaseTool]:
+    def get_tools(self) -> list[BaseTool]:
         return [
             ShellStartTool(),
             ShellRunTool(self.outputs_dir),
@@ -804,7 +811,7 @@ class ShellStatus(BaseStatus):
     def description(self) -> str:
         return "Persistent shell (bash/cmd) status."
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         shell_exe, _ = _get_shell_config()
         return {
             "name": self.name,

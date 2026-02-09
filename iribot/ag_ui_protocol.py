@@ -1,9 +1,8 @@
 """AG-UI Protocol implementation for chat messages"""
-from typing import Optional, List, Any, Literal, Union
-from dataclasses import dataclass, asdict, field
-from datetime import datetime
 import json
 import uuid
+from dataclasses import asdict, dataclass, field
+from typing import Any, Literal
 
 
 @dataclass
@@ -21,14 +20,14 @@ class ToolCall:
 class BinaryContent:
     """Binary content (image, file, etc.)"""
     type: Literal["binary"] = "binary"
-    mimeType: str = "image/jpeg"
-    data: Optional[str] = None  # base64 encoded
-    id: Optional[str] = None
-    url: Optional[str] = None
-    filename: Optional[str] = None
+    mime_type: str = "image/jpeg"
+    data: str | None = None  # base64 encoded
+    id: str | None = None
+    url: str | None = None
+    filename: str | None = None
 
     def to_dict(self):
-        return {k: v for k, v in asdict(self).items() if v is not None}
+        return asdict(self)
 
 
 @dataclass
@@ -36,18 +35,18 @@ class AGUIMessage:
     """AG-UI Protocol Message"""
     id: str
     role: str  # "user", "assistant", "system", etc.
-    content: Optional[str] = None
-    name: Optional[str] = None
-    tool_calls: List[ToolCall] = field(default_factory=list)
-    tool_results: List[dict] = field(default_factory=list)
-    binary_content: List[BinaryContent] = field(default_factory=list)
+    content: str | None = None
+    name: str | None = None
+    tool_calls: list[ToolCall] = field(default_factory=list)
+    tool_results: list[dict] = field(default_factory=list)
+    binary_content: list[BinaryContent] = field(default_factory=list)
     metadata: dict = field(default_factory=dict)
 
     @classmethod
-    def from_message(cls, message: dict) -> "AGUIMessage":
+    def from_message(cls, message: dict) -> AGUIMessage:
         """Convert chat message to AG-UI format"""
         msg_id = message.get("id", str(uuid.uuid4()))
-        
+
         # Convert legacy 'images' field to binary_content
         binary_content = message.get("binary_content") or []
         if not binary_content and message.get("images"):
@@ -61,7 +60,7 @@ class AGUIMessage:
                 ).to_dict()
                 for i, img in enumerate(message.get("images", []))
             ]
-        
+
         # Ensure metadata includes timestamp
         metadata = message.get("metadata") or {}
         if "timestamp" not in metadata and message.get("timestamp"):
@@ -70,7 +69,7 @@ class AGUIMessage:
                 metadata["timestamp"] = timestamp.isoformat()
             else:
                 metadata["timestamp"] = str(timestamp)
-        
+
         return cls(
             id=msg_id,
             role=message.get("role", "user"),
@@ -88,31 +87,31 @@ class AGUIMessage:
             "id": self.id,
             "role": self.role,
         }
-        
+
         if self.content:
             data["content"] = self.content
-        
+
         if self.name:
             data["name"] = self.name
-        
+
         if self.tool_calls:
             data["tool_calls"] = [
                 tc.to_dict() if hasattr(tc, 'to_dict') else tc
                 for tc in self.tool_calls
             ]
-        
+
         if self.tool_results:
             data["tool_results"] = self.tool_results
-        
+
         if self.binary_content:
             data["binary_content"] = [
                 bc.to_dict() if hasattr(bc, 'to_dict') else bc
                 for bc in self.binary_content
             ]
-        
+
         if self.metadata:
             data["metadata"] = self.metadata
-        
+
         return data
 
     def to_json(self):
@@ -122,12 +121,12 @@ class AGUIMessage:
 
 class AGUIEventEncoder:
     """Encodes and decodes AG-UI protocol events"""
-    
+
     @staticmethod
     def encode_message(message: AGUIMessage) -> str:
         """Encode AG-UI message to JSON"""
         return message.to_json()
-    
+
     @staticmethod
     def decode_message(data: str) -> AGUIMessage:
         """Decode AG-UI message from JSON"""
@@ -144,7 +143,7 @@ class AGUIEventEncoder:
         )
 
     @staticmethod
-    def event_stream(messages: List[dict]) -> List[str]:
+    def event_stream(messages: list[dict]) -> list[str]:
         """Convert messages to AG-UI event stream"""
         events = []
         for msg in messages:
@@ -159,7 +158,7 @@ def convert_to_ag_ui(message: dict) -> dict:
     return ag_msg.to_dict()
 
 
-def convert_messages_to_ag_ui(messages: List[dict]) -> List[dict]:
+def convert_messages_to_ag_ui(messages: list[dict]) -> list[dict]:
     """Convert list of messages to AG-UI format"""
     return [convert_to_ag_ui(msg) for msg in messages]
 
@@ -172,7 +171,7 @@ class ToolCallRecordAGUI:
     arguments: dict
     result: Any
     success: bool
-    timestamp: Optional[str] = None
+    timestamp: str | None = None
 
     def to_dict(self):
         return {
@@ -189,12 +188,12 @@ class ToolCallRecordAGUI:
 class LLMCallRecordAGUI:
     """AG-UI format for LLM call record"""
     id: str
-    request_messages: List[dict]
-    response_content: Optional[str] = None
-    tool_calls: List[dict] = field(default_factory=list)
-    tool_results: List[ToolCallRecordAGUI] = field(default_factory=list)
-    finish_reason: Optional[str] = None
-    timestamp: Optional[str] = None
+    request_messages: list[dict]
+    response_content: str | None = None
+    tool_calls: list[dict] = field(default_factory=list)
+    tool_results: list[ToolCallRecordAGUI] = field(default_factory=list)
+    finish_reason: str | None = None
+    timestamp: str | None = None
 
     def to_dict(self):
         return {
@@ -211,7 +210,7 @@ class LLMCallRecordAGUI:
         }
 
 
-def convert_llm_calls_to_ag_ui(llm_calls: List[dict]) -> List[dict]:
+def convert_llm_calls_to_ag_ui(llm_calls: list[dict]) -> list[dict]:
     """Convert LLM call records to AG-UI format"""
     result = []
     for call in llm_calls:
@@ -229,11 +228,11 @@ def convert_llm_calls_to_ag_ui(llm_calls: List[dict]) -> List[dict]:
                     success=tr.get("success", False),
                     timestamp=str(timestamp) if timestamp else None
                 ))
-        
+
         timestamp = call.get("timestamp")
         if hasattr(timestamp, 'isoformat'):
             timestamp = timestamp.isoformat()
-        
+
         ag_call = LLMCallRecordAGUI(
             id=call.get("id", ""),
             request_messages=call.get("request_messages", []),

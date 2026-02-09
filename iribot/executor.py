@@ -1,13 +1,15 @@
 """Tool executor and registry"""
-from typing import Any, Dict, List, Callable
+from collections.abc import Callable
 from pathlib import Path
-from .tools.base import BaseTool, BaseToolGroup, BaseStatus
-from .tools.execute_command import ShellToolGroup, ShellStatus
-from .tools.read_file import ReadFileTool
-from .tools.write_file import WriteFileTool
+from typing import Any
+
+from .tools.base import BaseStatus, BaseTool, BaseToolGroup
+from .tools.execute_command import ShellStatus, ShellToolGroup
 from .tools.list_directory import ListDirectoryTool
+from .tools.read_file import ReadFileTool
 from .tools.skills import UseSkillTool
 from .tools.skills_status import SkillsStatus
+from .tools.write_file import WriteFileTool
 
 
 class ToolExecutor:
@@ -15,9 +17,9 @@ class ToolExecutor:
 
     def __init__(self):
         self.outputs_dir = self._ensure_outputs_dir()
-        self.tools: Dict[str, BaseTool] = {}
-        self.statuses: Dict[str, BaseStatus] = {}
-        self._shutdown_handlers: List[Callable[[], None]] = []
+        self.tools: dict[str, BaseTool] = {}
+        self.statuses: dict[str, BaseStatus] = {}
+        self._shutdown_handlers: list[Callable[[], None]] = []
         self._register_default_tools()
 
     def _ensure_outputs_dir(self) -> Path:
@@ -39,7 +41,7 @@ class ToolExecutor:
         self.register_tool_group(ShellToolGroup(self.outputs_dir))
         self.register_status(ShellStatus())
         self.register_status(SkillsStatus())
-    
+
     def register_tool(self, tool: BaseTool) -> None:
         """Register a new tool"""
         self.tools[tool.name] = tool
@@ -62,15 +64,15 @@ class ToolExecutor:
         """Run all registered shutdown handlers"""
         for handler in self._shutdown_handlers:
             handler()
-    
-    def execute_tool(self, tool_name: str, **kwargs) -> Dict[str, Any]:
+
+    def execute_tool(self, tool_name: str, **kwargs) -> dict[str, Any]:
         """Execute a registered tool"""
         if tool_name not in self.tools:
             return {
                 "success": False,
                 "error": f"Tool '{tool_name}' not found"
             }
-        
+
         try:
             tool = self.tools[tool_name]
             result = tool.execute(**kwargs)
@@ -80,12 +82,12 @@ class ToolExecutor:
                 "success": False,
                 "error": str(e)
             }
-    
-    def get_all_tools(self) -> List[Dict[str, Any]]:
+
+    def get_all_tools(self) -> list[dict[str, Any]]:
         """Get all registered tools in OpenAI format"""
         return [tool.to_dict() for tool in self.tools.values()]
 
-    def get_all_tool_statuses(self) -> List[Dict[str, Any]]:
+    def get_all_tool_statuses(self) -> list[dict[str, Any]]:
         """Get status for all registered tools"""
         return [status.get_status() for status in self.statuses.values()]
 

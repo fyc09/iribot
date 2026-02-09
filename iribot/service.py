@@ -236,20 +236,13 @@ def chat_stream(request: ChatRequest):
 
                 yield _sse_data({'type': 'tool_calls_start', 'tool_calls': tool_calls})
 
-                if current_content:
-                    thinking_record = MessageRecord(
-                        role="assistant",
-                        content=current_content
-                    )
-                    session_manager.add_record(request.session_id, thinking_record.model_dump())
-                    yield _sse_data({'type': 'record', 'record': thinking_record.model_dump()})
-
-                current_tool_call_assistant = {
-                    "role": "assistant",
-                    "content": current_content,
-                    "tool_calls": tool_calls
-                }
-                messages.append(current_tool_call_assistant)
+                # Save the assistant message to session (without tool_calls, they are stored separately)
+                assistant_record = MessageRecord(
+                    role="assistant",
+                    content=current_content
+                )
+                session_manager.add_record(request.session_id, assistant_record.model_dump())
+                yield _sse_data({'type': 'record', 'record': assistant_record.model_dump()})
 
                 # Execute tool calls
                 for tool_call in tool_calls:
@@ -295,13 +288,6 @@ def chat_stream(request: ChatRequest):
 
                     # Send tool result
                     yield _sse_data({'type': 'tool_result', 'record': tool_record.model_dump()})
-
-                    # Add tool result to messages
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_id,
-                        "content": json.dumps(result) if isinstance(result, dict) else str(result)
-                    })
 
             # Max iterations reached
             final_content = "Tool execution reached maximum iterations. Please try again with a simpler request."

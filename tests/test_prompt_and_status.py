@@ -1,6 +1,4 @@
 """Tests for prompt generator and skills status."""
-from pathlib import Path
-
 from iribot.prompt_generator import (
     get_available_skills_description,
     get_available_tools_description,

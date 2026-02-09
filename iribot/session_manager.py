@@ -85,17 +85,19 @@ class SessionManager:
 
         messages = []
         tool_call_index = 0
+        last_assistant_message = None
 
         for record in session.records:
             if record.get("type") == "message":
                 role = record.get("role")
                 content = record.get("content", "")
 
-                if role in ["system", "user"]:
-                    messages.append({"role": role, "content": content})
-                elif role == "assistant":
-                    # Check if this assistant message had tool calls following it
-                    messages.append({"role": "assistant", "content": content})
+                if role not in {"system", "user", "assistant"}:
+                    raise ValueError(f"Invalid message role: {role}")
+                messages.append({"role": role, "content": content})
+
+                if role == "assistant":
+                    last_assistant_message = messages[-1]
 
             elif record.get("type") == "tool_call":
                 tool_call_index += 1
@@ -106,38 +108,43 @@ class SessionManager:
                 arguments = record.get("arguments", {})
                 result = record.get("result")
 
-                if messages and messages[-1]["role"] == "assistant":
-                    if "tool_calls" not in messages[-1]:
-                        messages[-1]["tool_calls"] = []
+                # Find the corresponding assistant message with matching tool_call
+                # The assistant message should already have tool_calls from service.py
+                if not last_assistant_message:
+                    raise ValueError(f"Tool call record {tool_call_id} does not have a preceding assistant message")
 
-                    if should_truncate:
-                        messages[-1]["tool_calls"].append({
-                            "id": tool_call_id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": "{}"
-                            }
-                        })
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call_id,
-                            "content": "[Tool call details truncated]"
-                        })
-                    else:
-                        messages[-1]["tool_calls"].append({
-                            "id": tool_call_id,
-                            "type": "function",
-                            "function": {
-                                "name": tool_name,
-                                "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments)
-                            }
-                        })
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": tool_call_id,
-                            "content": json.dumps(result) if isinstance(result, dict) else str(result)
-                        })
+                # Ensure tool_calls list exists (for backward compatibility)
+                if "tool_calls" not in last_assistant_message:
+                    last_assistant_message["tool_calls"] = []
+
+                if should_truncate:
+                    last_assistant_message["tool_calls"].append({
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": "{}"
+                        }
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": "[Tool call details truncated]"
+                    })
+                else:
+                    last_assistant_message["tool_calls"].append({
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments)
+                        }
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "content": json.dumps(result) if isinstance(result, dict) else str(result)
+                    })
 
         return messages
 

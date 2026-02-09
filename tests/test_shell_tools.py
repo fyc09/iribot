@@ -177,7 +177,7 @@ class TestShellTools:
         # Write to shell
         write_tool = ShellWriteTool()
         result = write_tool.execute(
-            session_id=shell_session_id, input="echo 'write_test'"
+            session_id=shell_session_id, shell_input="echo 'write_test'"
         )
         assert result["success"] is True
 

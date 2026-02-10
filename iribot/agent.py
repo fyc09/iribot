@@ -96,19 +96,45 @@ class Agent:
         )
 
         content = ""
-        tool_calls_data = {}  # {index: {id, function: {name, arguments}}}
+        reasoning_content = ""
+        tool_calls_data = {}
         finish_reason = None
+
+        # Special handling for moonshot/kimi: stream reasoning_content before content
+        is_moonshot = (
+            settings.openai_base_url and
+            settings.openai_base_url.rstrip("/").endswith("api.moonshot.cn/v1")
+        )
+        content_started = False  # Whether content field has started streaming
+        reasoning_started = False
 
         for chunk in response:
             delta = chunk.choices[0].delta if chunk.choices else None
 
             if delta:
-                # Handle content
+                # For moonshot: stream reasoning_content before content
+                if is_moonshot and hasattr(delta, "reasoning_content"):
+                    rc = getattr(delta, "reasoning_content")
+                    if rc:
+                        reasoning_content += rc
+                        if not reasoning_started:
+                            # First reasoning content, send start
+                            yield {"type": "reasoning_start"}
+                            reasoning_started = True
+                        # Stream reasoning_content as it appears
+                        yield {"type": "reasoning", "content": rc}
+
+                # Stream content as normal
                 if delta.content:
+                    if is_moonshot and not content_started:
+                        # When content starts, reasoning_content is finished; insert a separator
+                        if reasoning_content:
+                            yield {"type": "reasoning_end"}
+                        content_started = True
                     content += delta.content
                     yield {"type": "content", "content": delta.content}
 
-                # Handle tool calls
+                # Handle tool calls as usual
                 if delta.tool_calls:
                     for tc in delta.tool_calls:
                         idx = tc.index
@@ -118,35 +144,38 @@ class Agent:
                                 "type": "function",
                                 "function": {"name": "", "arguments": ""},
                             }
-
                         if tc.id:
                             tool_calls_data[idx]["id"] = tc.id
                         if tc.function:
                             if tc.function.name:
-                                tool_calls_data[idx]["function"][
-                                    "name"
-                                ] = tc.function.name
+                                tool_calls_data[idx]["function"]["name"] = tc.function.name
                             if tc.function.arguments:
-                                tool_calls_data[idx]["function"][
-                                    "arguments"
-                                ] += tc.function.arguments
+                                tool_calls_data[idx]["function"]["arguments"] += tc.function.arguments
 
             if chunk.choices and chunk.choices[0].finish_reason:
                 finish_reason = chunk.choices[0].finish_reason
 
-        # Yield final result with tool calls
+        # Collect tool calls for the final result
         tool_calls = (
             [tool_calls_data[i] for i in sorted(tool_calls_data.keys())]
-            if tool_calls_data
-            else []
+            if tool_calls_data else []
         )
 
-        yield {
+        # Final result
+        result = {
             "type": "done",
             "content": content.strip(),
             "tool_calls": tool_calls,
+            "reasoning_content": reasoning_content.strip() if reasoning_content else "",
             "finish_reason": finish_reason,
         }
+
+        logger.info(
+            "OpenAI response: %s",
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        
+        yield result
 
     def process_tool_call(
         self,

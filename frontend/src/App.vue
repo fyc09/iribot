@@ -20,7 +20,6 @@
 
 <script setup>
 import { ref, onMounted } from "vue";
-import { useChat } from "@tdesign-vue-next/chat";
 import { MessagePlugin } from "tdesign-vue-next";
 import ChatSidebar from "./components/ChatSidebar.vue";
 import ChatContainer from "./components/ChatContainer.vue";
@@ -32,12 +31,7 @@ const sessions = ref([]);
 const currentSessionId = ref(null);
 const inputMessage = ref("");
 const toolStatuses = ref([]);
-
-// useChat hook - only for message display management
-const { chatEngine, messages, status } = useChat({
-  defaultMessages: [],
-});
-
+const messages = ref([]);
 const loading = ref(false);
 
 async function loadSessions() {
@@ -96,7 +90,7 @@ async function selectSession(sessionId) {
     // Convert records to UI messages
     const convertedMessages = convertRecordsToMessages(session.records || []);
 
-    await chatEngine.value?.setMessages(convertedMessages, "replace");
+    messages.value = convertedMessages;
   } catch (error) {
     MessagePlugin.error(`Failed to load session: ${error.message}`);
   }
@@ -118,7 +112,7 @@ async function deleteSession(sessionId) {
         await selectSession(sessions.value[0].id);
       } else {
         currentSessionId.value = null;
-        await chatEngine.value?.setMessages([], "replace");
+        messages.value = [];
       }
     }
     
@@ -149,6 +143,18 @@ function convertRecordsToMessages(records) {
         });
       } else if (record.role === "assistant") {
         // Assistant messages are shown directly
+        // First add reasoning content if exists
+        if (record.reasoning_content) {
+          messages.push({
+            id: `reasoning_${i}`,
+            role: "assistant",
+            content: [{ type: "reasoning", data: record.reasoning_content.trim() }],
+            datetime: record.timestamp,
+            status: "complete",
+            collapsed: true,
+          });
+        }
+        // Then add main content if exists
         if (record.content) {
           messages.push({
             id: `assistant_${i}`,
@@ -197,7 +203,7 @@ async function sendMessage(userInput) {
       status: "complete",
     };
     currentMessages.push(userMsg);
-    await chatEngine.value?.setMessages(currentMessages, "replace");
+    messages.value = currentMessages;
 
     // Use streaming API
     const response = await fetch(`${API_BASE}/chat/stream`, {
@@ -218,6 +224,7 @@ async function sendMessage(userInput) {
 
     let currentAssistantMsg = null; // Assistant message currently streaming
     let streamingContent = ""; // Accumulated streaming content
+    let streamingReasoningContent = ""; // Accumulated reasoning content
 
     while (true) {
       const { done, value } = await reader.read();
@@ -240,7 +247,49 @@ async function sendMessage(userInput) {
         try {
           const event = JSON.parse(jsonStr);
 
-          if (event.type === "content") {
+          // --- Reasoning streaming logic ---
+          if (event.type === "reasoning_start") {
+            // New reasoning message
+            if (!currentAssistantMsg) {
+              currentAssistantMsg = {
+                id: `reasoning_${Date.now()}`,
+                role: "assistant",
+                content: [{ type: "reasoning", data: "" }],
+                status: "streaming",
+                collapsed: false,
+                _reasoning: true,
+              };
+              streamingReasoningContent = "";
+              currentMessages = [...(messages.value || [])];
+              currentMessages.push(currentAssistantMsg);
+              messages.value = currentMessages;
+            }
+          } else if (event.type === "reasoning") {
+            // Update reasoning content
+            if (currentAssistantMsg && currentAssistantMsg._reasoning) {
+              streamingReasoningContent += event.content;
+              currentAssistantMsg = {
+                ...currentAssistantMsg,
+                content: [{ type: "reasoning", data: streamingReasoningContent }],
+              };
+              currentMessages = [...(messages.value || [])];
+              currentMessages[currentMessages.length - 1] = currentAssistantMsg;
+              messages.value = currentMessages;
+            }
+          } else if (event.type === "reasoning_end") {
+            // End reasoning
+            if (currentAssistantMsg && currentAssistantMsg._reasoning) {
+              currentAssistantMsg = {
+                ...currentAssistantMsg,
+                status: "complete",
+                collapsed: false,
+              };
+              currentMessages = [...(messages.value || [])];
+              currentMessages[currentMessages.length - 1] = currentAssistantMsg;
+              messages.value = currentMessages;
+              currentAssistantMsg = null;
+            }
+          } else if (event.type === "content") {
             // Streaming content
             streamingContent += event.content;
 
@@ -264,7 +313,7 @@ async function sendMessage(userInput) {
               currentMessages[currentMessages.length - 1] = currentAssistantMsg;
             }
 
-            await chatEngine.value?.setMessages(currentMessages, "replace");
+            messages.value = currentMessages;
           } else if (event.type === "record") {
             // Completed record (assistant message or other)
             if (
@@ -281,7 +330,7 @@ async function sendMessage(userInput) {
                 currentMessages = [...(messages.value || [])];
                 currentMessages[currentMessages.length - 1] =
                   currentAssistantMsg;
-                await chatEngine.value?.setMessages(currentMessages, "replace");
+                messages.value = currentMessages;
                 currentAssistantMsg = null;
                 streamingContent = "";
               } else if (event.record.content) {
@@ -294,7 +343,7 @@ async function sendMessage(userInput) {
                 };
                 currentMessages = [...(messages.value || [])];
                 currentMessages.push(newAssistantMsg);
-                await chatEngine.value?.setMessages(currentMessages, "replace");
+                messages.value = currentMessages;
               }
             }
           } else if (event.type === "tool_start") {
@@ -306,7 +355,7 @@ async function sendMessage(userInput) {
               };
               currentMessages = [...(messages.value || [])];
               currentMessages[currentMessages.length - 1] = currentAssistantMsg;
-              await chatEngine.value?.setMessages(currentMessages, "replace");
+              chatEngine.value?.setMessages(currentMessages, "replace");
               currentAssistantMsg = null;
               streamingContent = "";
             }
@@ -343,7 +392,7 @@ async function sendMessage(userInput) {
             };
             currentMessages = [...(messages.value || [])];
             currentMessages.push(toolStartMsg);
-            await chatEngine.value?.setMessages(currentMessages, "replace");
+            messages.value = currentMessages;
           } else if (event.type === "tool_result") {
             // Tool execution completed - find and update the matching tool message
             const toolRecord = event.record;
@@ -370,7 +419,7 @@ async function sendMessage(userInput) {
                 status: "complete",
               });
             }
-            await chatEngine.value?.setMessages(currentMessages, "replace");
+            messages.value = currentMessages;
           } else if (event.type === "done") {
             // Done
             break;
@@ -384,7 +433,7 @@ async function sendMessage(userInput) {
             };
             currentMessages = [...(messages.value || [])];
             currentMessages.push(errorMsg);
-            await chatEngine.value?.setMessages(currentMessages, "replace");
+            messages.value = currentMessages;
           }
         } catch (e) {
           console.error("Parse SSE error:", e, jsonStr);
@@ -407,7 +456,7 @@ async function sendMessage(userInput) {
             { type: "markdown", data: "\n\n*[Stopped]*" },
           ],
         };
-        await chatEngine.value?.setMessages(currentMessages, "replace");
+        messages.value = currentMessages;
       }
     } else {
       MessagePlugin.error(`Failed to send message: ${error.message}`);
@@ -423,7 +472,7 @@ async function sendMessage(userInput) {
         ],
         status: "complete",
       });
-      await chatEngine.value?.setMessages(errorMessages, "replace");
+      messages.value = errorMessages;
     }
   } finally {
     loading.value = false;

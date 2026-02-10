@@ -18,6 +18,7 @@ class MessageRecord(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
     binary_content: list[dict[str, Any]] | None = None  # Images, files, etc.
+    reasoning_content: str | None = None  # LLM reasoning content (for moonshot等)
     timestamp: datetime = Field(default_factory=get_local_now)
 
 

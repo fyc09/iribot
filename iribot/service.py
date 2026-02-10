@@ -200,13 +200,12 @@ def chat_stream(request: ChatRequest):
                 # This ensures older tool calls are truncated as more calls are made
                 messages = session_manager.get_messages_for_llm(request.session_id)
 
-                # Stream AI response
-                current_content = ""
                 tool_calls = []
 
                 # Generate fresh system prompt for each request to include latest skills
                 fresh_system_prompt = generate_system_prompt()
 
+                reasoning_content = None
                 for chunk in agent.chat_stream(
                     messages=messages,
                     system_prompt=fresh_system_prompt,
@@ -215,18 +214,26 @@ def chat_stream(request: ChatRequest):
                         if iteration == 0 else None
                     )
                 ):
-                    if chunk["type"] == "content":
-                        current_content += chunk["content"]
-                        yield f"data: {json.dumps({'type': 'content', 'content': chunk['content']})}\n\n"
+                    if chunk["type"] == "reasoning_start":
+                        yield _sse_data({'type': 'reasoning_start'})
+                    elif chunk["type"] == "reasoning":
+                        yield _sse_data({'type': 'reasoning', 'content': chunk['content']})
+                    elif chunk["type"] == "reasoning_end":
+                        yield _sse_data({'type': 'reasoning_end'})
+                    elif chunk["type"] == "content":
+                        yield _sse_data({'type': 'content', 'content': chunk['content']})
                     elif chunk["type"] == "done":
                         tool_calls = chunk.get("tool_calls", [])
+                        content = chunk["content"]
+                        reasoning_content = chunk["reasoning_content"]
 
                 if not tool_calls:
                     # No tool calls, save and finish
-                    if current_content:
+                    if content or reasoning_content:
                         assistant_record = MessageRecord(
                             role="assistant",
-                            content=current_content
+                            content=content,
+                            reasoning_content=reasoning_content
                         )
                         session_manager.add_record(request.session_id, assistant_record.model_dump())
                         yield _sse_data({'type': 'record', 'record': assistant_record.model_dump()})
@@ -234,12 +241,13 @@ def chat_stream(request: ChatRequest):
                     yield _sse_data({'type': 'done'})
                     return
 
-                yield _sse_data({'type': 'tool_calls_start', 'tool_calls': tool_calls})
+                yield _sse_data({'type': 'tool_calls_start', 'tool_calls': tool_calls, 'reasoning_content': reasoning_content})
 
-                # Save the assistant message to session (without tool_calls, they are stored separately)
+                # Save the assistant message to session (tool_calls are stored separately)
                 assistant_record = MessageRecord(
                     role="assistant",
-                    content=current_content
+                    content=content,
+                    reasoning_content=reasoning_content
                 )
                 session_manager.add_record(request.session_id, assistant_record.model_dump())
                 yield _sse_data({'type': 'record', 'record': assistant_record.model_dump()})

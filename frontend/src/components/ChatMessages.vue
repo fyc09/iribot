@@ -1,20 +1,26 @@
 <template>
-  <t-chat-list :clear-history="false" class="messages-wrapper">
-    <template v-for="message in messages" :key="message.id">
-      <t-chat-message
-        v-if="message.role === 'user'"
-        :message="message"
-        placement="right"
-        variant="base"
-      />
-      <t-chat-message
-        v-else-if="message.role === 'assistant'"
-        :message="message"
-        placement="left"
-        variant="text"
-      >
-        <template #content>
-          <div v-for="(item, idx) in message.content" :key="idx">
+  <div class="messages-wrapper">
+    <t-chat-message
+      variant="text"
+      v-for="message in messages"
+      :key="message.id"
+    >
+      <template #content>
+        <template v-if="message.role === 'user'">
+          <div
+            v-for="(item, idx) in message.content"
+            :key="idx"
+            class="content-item"
+          >
+            <div class="plain-content">{{ item.data }}</div>
+          </div>
+        </template>
+        <template v-else>
+          <template
+            v-for="(item, idx) in message.content"
+            :key="idx"
+            class="content-item"
+          >
             <ToolCallMessage
               v-if="
                 item.type === 'custom' &&
@@ -27,45 +33,27 @@
               :content="item.data"
               :options="markdownOptions"
             />
-            <div v-else>{{ item.data }}</div>
-          </div>
-        </template>
-      </t-chat-message>
-      <t-chat-message
-        v-else
-        :message="message"
-        :placement="message.role === 'user' ? 'right' : 'left'"
-        :variant="message.role === 'user' ? 'base' : 'text'"
-      >
-        <template #content>
-          <div v-for="(item, idx) in message.content" :key="idx">
-            <t-chat-markdown
-              v-if="message.role === 'assistant' && item.type === 'markdown'"
-              :content="item.data"
-              :options="markdownOptions"
+            <t-chat-thinking
+              v-else-if="item.type === 'reasoning'"
+              :content="{ title: '推理过程', text: item.data }"
+              :status="item.status === 'streaming' ? 'pending' : 'complete'"
+              layout="border"
+              :collapsed="item.collapsed"
+              @collapsed-change="item.collapsed = $event.detail"
             />
-            <div v-else>{{ item.data }}</div>
-          </div>
+            <div v-else class="plain-content">{{ item.data }}</div>
+          </template>
         </template>
-      </t-chat-message>
-    </template>
-  </t-chat-list>
+      </template>
+    </t-chat-message>
+  </div>
 </template>
 
 <script setup>
-import katex from "katex";
-import "katex/dist/katex.min.css";
 import ToolCallMessage from "./ToolCallMessage.vue";
+import katex from "katex";
 
-// 将 katex 挂载到 window 对象上
 window.katex = katex;
-
-defineProps({
-  messages: {
-    type: Array,
-    default: () => [],
-  },
-});
 
 const markdownOptions = {
   themeSettings: {
@@ -82,13 +70,28 @@ const markdownOptions = {
     },
   },
 };
+
+defineProps({
+  messages: {
+    type: Array,
+    default: () => [],
+  },
+});
 </script>
 
-<style scoped lang="less">
+<style scoped>
 .messages-wrapper {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   overflow-y: auto;
+  padding: 16px;
+}
+
+.user-message .message-content {
+  text-align: right;
+}
+
+.assistant-message .message-content {
+  text-align: left;
+  line-height: 2;
 }
 </style>

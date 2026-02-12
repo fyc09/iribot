@@ -6,6 +6,7 @@ from typing import Any
 from .tools.base import BaseStatus, BaseTool, BaseToolGroup
 from .tools.execute_command import ShellStatus, ShellToolGroup
 from .tools.list_directory import ListDirectoryTool
+from .tools.memory import MemoryForgetTool, MemoryListTool, MemoryRememberTool
 from .tools.read_file import ReadFileTool
 from .tools.skills import UseSkillTool
 from .tools.skills_status import SkillsStatus
@@ -34,6 +35,9 @@ class ToolExecutor:
             WriteFileTool(),
             ListDirectoryTool(),
             UseSkillTool(),
+            MemoryRememberTool(),
+            MemoryListTool(),
+            MemoryForgetTool(),
         ]
         for tool in default_tools:
             self.register_tool(tool)

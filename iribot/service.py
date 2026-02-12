@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from .agent import agent
 from .config import settings
@@ -51,6 +52,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class MemoryCreateRequest(BaseModel):
+    """Request to create a session memory."""
+    session_id: str
+    content: str
+    tags: list[str] | None = None
 
 
 # Prompt Generation Endpoints
@@ -151,6 +159,36 @@ def get_session(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     return session.model_dump()
+
+
+@app.post("/api/sessions/{session_id}/memories")
+def add_memory(session_id: str, request: MemoryCreateRequest):
+    """Add an important memory to a session."""
+    if request.session_id != session_id:
+        raise HTTPException(status_code=400, detail="session_id mismatch")
+
+    memory = session_manager.add_memory(session_id=session_id, content=request.content, tags=request.tags)
+    if memory is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return memory
+
+
+@app.get("/api/sessions/{session_id}/memories")
+def list_memories(session_id: str):
+    """List memories for a session."""
+    session = session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session_manager.list_memories(session_id)
+
+
+@app.delete("/api/sessions/{session_id}/memories/{memory_id}")
+def delete_memory(session_id: str, memory_id: str):
+    """Delete a memory by id."""
+    deleted = session_manager.delete_memory(session_id=session_id, memory_id=memory_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Memory not found")
+    return {"status": "success", "memory_id": memory_id}
 
 
 @app.delete("/api/sessions/{session_id}")

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import settings
-from .models import Session
+from .models import MemoryRecord, Session
 
 
 class SessionManager:
@@ -33,7 +33,7 @@ class SessionManager:
         return sorted(
             self.sessions.values(),
             key=lambda s: s.updated_at,
-            reverse=True
+            reverse=True,
         )
 
     def add_record(self, session_id: str, record: dict[str, Any]) -> Session | None:
@@ -58,6 +58,40 @@ class SessionManager:
         self._save_session(session)
         return session
 
+    def add_memory(self, session_id: str, content: str, tags: list[str] | None = None) -> dict[str, Any] | None:
+        """Save an important memory for a session."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+
+        memory = MemoryRecord(content=content.strip(), tags=tags or [])
+        session.memories.append(memory.model_dump())
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return memory.model_dump()
+
+    def list_memories(self, session_id: str) -> list[dict[str, Any]]:
+        """List stored memories for a session."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return []
+        return session.memories
+
+    def delete_memory(self, session_id: str, memory_id: str) -> bool:
+        """Delete a memory by ID."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return False
+
+        original_count = len(session.memories)
+        session.memories = [m for m in session.memories if m.get("id") != memory_id]
+        if len(session.memories) == original_count:
+            return False
+
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return True
+
     def delete_session(self, session_id: str) -> bool:
         """Delete a session"""
         if session_id not in self.sessions:
@@ -75,15 +109,18 @@ class SessionManager:
         if not session:
             return []
 
-        # First pass: count total tool calls
         total_tool_calls = sum(1 for r in session.records if r.get("type") == "tool_call")
-        tool_history_rounds = settings.tool_history_rounds
-
-        # Calculate the threshold: tool calls with index <= threshold should be truncated
-        # We keep the most recent `tool_history_rounds` tool calls
-        truncation_threshold = total_tool_calls - tool_history_rounds
+        truncation_threshold = total_tool_calls - settings.tool_history_rounds
 
         messages = []
+        if session.memories:
+            memory_lines = [f"- [{m.get('id')}] {m.get('content')}" for m in session.memories if m.get("content")]
+            if memory_lines:
+                messages.append({
+                    "role": "system",
+                    "content": "Important memory from this session:\n" + "\n".join(memory_lines),
+                })
+
         tool_call_index = 0
         last_assistant_message = None
 
@@ -94,9 +131,8 @@ class SessionManager:
 
                 if role not in {"system", "user", "assistant"}:
                     raise ValueError(f"Invalid message role: {role}")
-                
-                reasoning_content = record.get("reasoning_content", None)
 
+                reasoning_content = record.get("reasoning_content", None)
                 messages.append({"role": role, "content": content, "reasoning_content": reasoning_content})
 
                 if role == "assistant":
@@ -111,57 +147,59 @@ class SessionManager:
                 arguments = record.get("arguments", {})
                 result = record.get("result")
 
-                # Find the corresponding assistant message with matching tool_call
-                # The assistant message should already have tool_calls from service.py
                 if not last_assistant_message:
                     raise ValueError(f"Tool call record {tool_call_id} does not have a preceding assistant message")
 
-                # Ensure tool_calls list exists (for backward compatibility)
                 if "tool_calls" not in last_assistant_message:
                     last_assistant_message["tool_calls"] = []
 
                 if should_truncate:
-                    last_assistant_message["tool_calls"].append({
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": "{}"
+                    last_assistant_message["tool_calls"].append(
+                        {
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {"name": tool_name, "arguments": "{}"},
                         }
-                    })
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "content": "[Tool call details truncated]"
-                    })
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": "[Tool call details truncated]",
+                        }
+                    )
                 else:
-                    last_assistant_message["tool_calls"].append({
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments)
+                    last_assistant_message["tool_calls"].append(
+                        {
+                            "id": tool_call_id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(arguments) if isinstance(arguments, dict) else str(arguments),
+                            },
                         }
-                    })
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call_id,
-                        "content": json.dumps(result) if isinstance(result, dict) else str(result)
-                    })
+                    )
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call_id,
+                            "content": json.dumps(result) if isinstance(result, dict) else str(result),
+                        }
+                    )
 
         return messages
 
     def _save_session(self, session: Session) -> None:
         """Save session to disk"""
         session_file = self.storage_path / f"{session.id}.json"
-        with open(session_file, 'w', encoding='utf-8') as f:
+        with open(session_file, "w", encoding="utf-8") as f:
             json.dump(session.model_dump(), f, indent=2, default=str, ensure_ascii=False)
 
     def _load_all_sessions(self) -> None:
         """Load all sessions from disk"""
         for session_file in self.storage_path.glob("*.json"):
             try:
-                with open(session_file, encoding='utf-8') as f:
+                with open(session_file, encoding="utf-8") as f:
                     data = json.load(f)
             except Exception as e:
                 print(f"Error loading session {session_file}: {e}")
@@ -169,6 +207,8 @@ class SessionManager:
             try:
                 if "messages" in data and "records" not in data:
                     data = self._migrate_old_format(data)
+                if "memories" not in data:
+                    data["memories"] = []
                 session = Session(**data)
                 self.sessions[session.id] = session
             except Exception as e:
@@ -178,27 +218,30 @@ class SessionManager:
         """Migrate from old message format to new record format"""
         records = []
 
-        # Add system message
-        records.append({
-            "type": "message",
-            "role": "system",
-            "content": data.get("system_prompt", ""),
-            "timestamp": data.get("created_at")
-        })
+        records.append(
+            {
+                "type": "message",
+                "role": "system",
+                "content": data.get("system_prompt", ""),
+                "timestamp": data.get("created_at"),
+            }
+        )
 
-        # Convert old messages to records
-        records.extend({
-            "type": "message",
-            "role": msg.get("role"),
-            "content": msg.get("content", ""),
-            "binary_content": msg.get("binary_content"),
-            "timestamp": msg.get("timestamp")
-        } for msg in data.get("messages", []))
+        records.extend(
+            {
+                "type": "message",
+                "role": msg.get("role"),
+                "content": msg.get("content", ""),
+                "binary_content": msg.get("binary_content"),
+                "timestamp": msg.get("timestamp"),
+            }
+            for msg in data.get("messages", [])
+        )
 
         data["records"] = records
+        data["memories"] = data.get("memories", [])
         del data["messages"]
         return data
 
 
-# Global session manager instance
 session_manager = SessionManager()

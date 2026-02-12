@@ -17,6 +17,7 @@ A full-featured AI agent application with tool calling capabilities and real-tim
 - Streaming responses for real-time replies (SSE)
 - Image input support (vision-capable models)
 - System prompt generation with current time and available tools/skills
+- Session memory mechanism to store important facts/preferences for future turns
 
 ### 🛠️ Tool Calling System
 
@@ -36,6 +37,11 @@ The agent can autonomously call tools to complete tasks:
 
 - **Skills**
   - `use_skill` - Load skill instructions from `skills/*/SKILL.md`
+
+- **Memory**
+  - `memory_remember` - Save important information for the current session
+  - `memory_list` - View remembered information
+  - `memory_forget` - Remove outdated memory entries
 
 ### 💬 Session Management
 

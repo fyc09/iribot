@@ -107,3 +107,17 @@ def test_tool_call_truncation(tmp_path):
             assert tool_call["function"]["name"] == f"tool_{i}"
             assert f"detail_{i}" in tool_call["function"]["arguments"]  # Arguments preserved
             assert f"result_{i}" in tool_result_messages[i]["content"]  # Result preserved
+
+
+def test_session_memory_injected_to_llm_messages(tmp_path):
+    manager = SessionManager(storage_path=str(tmp_path))
+    session = manager.create_session(title="memory")
+
+    manager.add_memory(session.id, "User prefers concise Chinese responses", tags=["preference"])
+    manager.add_record(session.id, MessageRecord(role="user", content="你好").model_dump())
+
+    messages = manager.get_messages_for_llm(session.id)
+    assert messages[0]["role"] == "system"
+    assert "Important memory" in messages[0]["content"]
+    assert "User prefers concise Chinese responses" in messages[0]["content"]
+    assert messages[1]["role"] == "user"

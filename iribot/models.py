@@ -33,6 +33,14 @@ class ToolCallRecord(BaseModel):
     timestamp: datetime = Field(default_factory=get_local_now)
 
 
+class MemoryRecord(BaseModel):
+    """Memory record for important long-lived facts"""
+    id: str = Field(default_factory=lambda: str(datetime.now().timestamp()))
+    content: str
+    tags: list[str] = []
+    created_at: datetime = Field(default_factory=get_local_now)
+
+
 # Union type for session records
 SessionRecord = MessageRecord | ToolCallRecord
 
@@ -44,6 +52,7 @@ class Session(BaseModel):
     id: str = Field(default_factory=lambda: str(datetime.now().timestamp()))
     title: str
     records: list[dict[str, Any]] = []  # List of MessageRecord or ToolCallRecord
+    memories: list[dict[str, Any]] = []  # Persisted important information for the agent
     created_at: datetime = Field(default_factory=get_local_now)
     updated_at: datetime = Field(default_factory=get_local_now)
 

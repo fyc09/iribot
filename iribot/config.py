@@ -42,6 +42,8 @@ class Settings(BaseSettings):
     # Tool History Configuration
     # After N rounds, tool call details are truncated (only tool names kept)
     tool_history_rounds: int = 10
+    # Configuration for thinking
+    enable_thinking: bool = False
 
 
 settings = Settings()

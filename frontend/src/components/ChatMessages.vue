@@ -1,21 +1,14 @@
 <template>
-  <div class="messages-wrapper">
-    <t-chat-message
-      variant="text"
-      v-for="message in messages"
-      :key="message.id"
-    >
-      <template #content>
-        <template v-if="message.role === 'user'">
-          <div
-            v-for="(item, idx) in message.content"
-            :key="idx"
-            class="content-item"
-          >
-            <div class="plain-content">{{ item.data }}</div>
-          </div>
-        </template>
-        <template v-else>
+  <t-chat-list :clear-history="false">
+    <template v-for="message in messages" :key="message.id">
+      <t-chat-message
+        v-if="message.role === 'user'"
+        variant="base"
+        placement="right"
+        :message="message"
+      />
+      <t-chat-message v-else variant="text">
+        <template #content>
           <template
             v-for="(item, idx) in message.content"
             :key="idx"
@@ -41,12 +34,12 @@
               :collapsed="item.collapsed"
               @collapsed-change="item.collapsed = $event.detail"
             />
-            <div v-else class="plain-content">{{ item.data }}</div>
+            <template v-else class="plain-content">{{ item.data }}</template>
           </template>
         </template>
-      </template>
-    </t-chat-message>
-  </div>
+      </t-chat-message>
+    </template>
+  </t-chat-list>
 </template>
 
 <script setup>

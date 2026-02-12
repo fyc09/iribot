@@ -29,6 +29,7 @@ class Agent:
         messages: list[dict[str, Any]],
         system_prompt: str,
         images: list[str] | None = None,
+        extra_body: dict[str, Any] | None = None,
     ) -> Generator[dict[str, Any]]:
         """
         Send a message to the LLM and stream the response
@@ -87,49 +88,54 @@ class Agent:
             ),
         )
 
+        # Build API call parameters
+        api_params = {
+            "model": self.model,
+            "messages": formatted_messages,
+            "tools": tools,
+            "stream": True,
+        }
+        if extra_body:
+            api_params["extra_body"] = extra_body
+        elif settings.enable_thinking:
+            api_params["extra_body"] = {"enable_thinking": True}
+
         # Call OpenAI API with streaming
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=formatted_messages,
-            tools=tools,
-            stream=True,
-        )
+        response = self.client.chat.completions.create(**api_params)
 
         content = ""
         reasoning_content = ""
         tool_calls_data = {}
         finish_reason = None
 
-        # Special handling for moonshot/kimi: stream reasoning_content before content
-        is_moonshot = (
-            settings.openai_base_url and
-            settings.openai_base_url.rstrip("/").endswith("api.moonshot.cn/v1")
-        )
         content_started = False  # Whether content field has started streaming
         reasoning_started = False
+        reasoning_ended = True
 
         for chunk in response:
             delta = chunk.choices[0].delta if chunk.choices else None
 
             if delta:
                 # For moonshot: stream reasoning_content before content
-                if is_moonshot and hasattr(delta, "reasoning_content"):
+                if hasattr(delta, "reasoning_content"):
                     rc = getattr(delta, "reasoning_content")
                     if rc:
                         reasoning_content += rc
                         if not reasoning_started:
                             # First reasoning content, send start
                             yield {"type": "reasoning_start"}
+                            reasoning_ended = False
                             reasoning_started = True
                         # Stream reasoning_content as it appears
                         yield {"type": "reasoning", "content": rc}
 
                 # Stream content as normal
                 if delta.content:
-                    if is_moonshot and not content_started:
+                    if not content_started:
                         # When content starts, reasoning_content is finished; insert a separator
-                        if reasoning_content:
+                        if reasoning_started:
                             yield {"type": "reasoning_end"}
+                            reasoning_ended = True
                         content_started = True
                     content += delta.content
                     yield {"type": "content", "content": delta.content}
@@ -154,6 +160,9 @@ class Agent:
 
             if chunk.choices and chunk.choices[0].finish_reason:
                 finish_reason = chunk.choices[0].finish_reason
+
+        if not reasoning_ended:
+            yield {"type": "reasoning_end"}
 
         # Collect tool calls for the final result
         tool_calls = (

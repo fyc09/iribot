@@ -118,7 +118,7 @@ class Agent:
             if delta:
                 # For moonshot: stream reasoning_content before content
                 if hasattr(delta, "reasoning_content"):
-                    rc = getattr(delta, "reasoning_content")
+                    rc = delta.reasoning_content
                     if rc:
                         reasoning_content += rc
                         if not reasoning_started:
@@ -183,7 +183,7 @@ class Agent:
             "OpenAI response: %s",
             json.dumps(result, ensure_ascii=False, default=str),
         )
-        
+
         yield result
 
     def process_tool_call(

@@ -94,7 +94,7 @@ class SessionManager:
 
                 if role not in {"system", "user", "assistant"}:
                     raise ValueError(f"Invalid message role: {role}")
-                
+
                 reasoning_content = record.get("reasoning_content", None)
 
                 messages.append({"role": role, "content": content, "reasoning_content": reasoning_content})

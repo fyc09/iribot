@@ -43,7 +43,7 @@ class AGUIMessage:
     metadata: dict = field(default_factory=dict)
 
     @classmethod
-    def from_message(cls, message: dict) -> "AGUIMessage":
+    def from_message(cls, message: dict) -> AGUIMessage:
         """Convert chat message to AG-UI format"""
         msg_id = message.get("id", str(uuid.uuid4()))
 

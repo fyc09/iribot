@@ -9,9 +9,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .agent import agent
-from .config import settings
+from .config import settings, update_settings
 from .executor import tool_executor
 from .models import (
+    AppConfig,
+    AppConfigUpdate,
     ChatRequest,
     MessageRecord,
     SessionCreate,
@@ -168,6 +170,21 @@ def get_tools_status():
     return tool_executor.get_all_tool_statuses()
 
 
+@app.get("/api/config")
+def get_app_config():
+    """Get runtime app configuration."""
+    return AppConfig(**settings.model_dump()).model_dump()
+
+
+@app.put("/api/config")
+def update_app_config(request: AppConfigUpdate):
+    """Update runtime app configuration."""
+    updates = request.model_dump(exclude_none=True)
+    updated = update_settings(updates)
+    agent.reload_config()
+    return AppConfig(**updated.model_dump()).model_dump()
+
+
 # Streaming chat endpoint
 @app.post("/api/chat/stream")
 def chat_stream(request: ChatRequest):
@@ -241,7 +258,11 @@ def chat_stream(request: ChatRequest):
                     yield _sse_data({'type': 'done'})
                     return
 
-                yield _sse_data({'type': 'tool_calls_start', 'tool_calls': tool_calls, 'reasoning_content': reasoning_content})
+                yield _sse_data({
+                    'type': 'tool_calls_start',
+                    'tool_calls': tool_calls,
+                    'reasoning_content': reasoning_content
+                })
 
                 # Save the assistant message to session (tool_calls are stored separately)
                 assistant_record = MessageRecord(

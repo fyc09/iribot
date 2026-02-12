@@ -17,12 +17,18 @@ class Agent:
     """Agent for handling LLM interactions"""
 
     def __init__(self):
+        self._rebuild_client()
+
+    def _rebuild_client(self) -> None:
         client_params = {"api_key": settings.openai_api_key}
         if settings.openai_base_url:
             client_params["base_url"] = settings.openai_base_url
-
         self.client = OpenAI(**client_params)
         self.model = settings.openai_model
+
+    def reload_config(self) -> None:
+        """Reload client/model from the latest settings."""
+        self._rebuild_client()
 
     def chat_stream(
         self,

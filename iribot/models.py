@@ -78,3 +78,31 @@ class SessionCreate(BaseModel):
     """Create new session request"""
     title: str = "New Chat"
     system_prompt: str | None = None
+
+
+class AppConfig(BaseModel):
+    """Runtime application configuration."""
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4-vision-preview"
+    openai_base_url: str | None = None
+    debug: bool = False
+    app_title: str = "Agent Application"
+    bash_path: str = "bash"
+    shell_type: str = "auto"
+    cors_origins: list[str] = Field(default_factory=list)
+    tool_history_rounds: int = 10
+    enable_thinking: bool = False
+
+
+class AppConfigUpdate(BaseModel):
+    """Partial config update payload."""
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    openai_base_url: str | None = None
+    debug: bool | None = None
+    app_title: str | None = None
+    bash_path: str | None = None
+    shell_type: str | None = None
+    cors_origins: list[str] | None = None
+    tool_history_rounds: int | None = None
+    enable_thinking: bool | None = None

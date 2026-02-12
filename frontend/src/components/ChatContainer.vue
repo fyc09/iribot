@@ -1,10 +1,13 @@
 <template>
   <t-layout class="chat-main">
     <div class="chat-toolbar">
-      <t-button theme="primary" variant="text" @click="openToolStatus">
+      <t-button theme="primary" variant="text" @click="configVisible = true">
+        Config
+      </t-button>
+      <t-button theme="primary" variant="text" @click="toolStatusVisible = true">
         View tool status
       </t-button>
-      <t-button theme="primary" variant="text" @click="openSystemPrompt">
+      <t-button theme="primary" variant="text" @click="systemPromptVisible = true">
         View system prompt
       </t-button>
     </div>
@@ -15,33 +18,22 @@
       @send="handleSend"
       @stop="handleStop"
     />
-    <t-dialog
+    <ToolStatusDialog
       v-model:visible="toolStatusVisible"
-      header="Tool Status"
-      width="1920px"
-      :footer="false"
-      @open="handleRefreshTools"
-    >
-      <ToolStatusPanel :tool-statuses="toolStatuses" @refresh="handleRefreshTools" />
-    </t-dialog>
-    <t-dialog
-      v-model:visible="systemPromptVisible"
-      header="System Prompt"
-      width="800px"
-      :footer="false"
-    >
-      <pre class="system-prompt-content">{{ systemPromptContent }}</pre>
-    </t-dialog>
+      :tool-statuses="toolStatuses"
+      @refresh-tools="handleRefreshTools"
+    />
+    <SystemPromptDialog v-model:visible="systemPromptVisible" />
+    <ConfigDialog v-model:visible="configVisible" />
   </t-layout>
 </template>
 
 <script setup>
 import { ref } from "vue";
-import { MessagePlugin } from "tdesign-vue-next";
 import ChatMessages from "./ChatMessages.vue";
-import ToolStatusPanel from "./ToolStatusPanel.vue";
-
-const API_BASE = "/api";
+import ToolStatusDialog from "./dialogs/ToolStatusDialog.vue";
+import SystemPromptDialog from "./dialogs/SystemPromptDialog.vue";
+import ConfigDialog from "./dialogs/ConfigDialog.vue";
 
 const props = defineProps({
   messages: {
@@ -61,7 +53,7 @@ const props = defineProps({
 const inputMessage = ref("");
 const toolStatusVisible = ref(false);
 const systemPromptVisible = ref(false);
-const systemPromptContent = ref("");
+const configVisible = ref(false);
 const emits = defineEmits(["send", "stop", "refresh-tools"]);
 
 function handleSend(text) {
@@ -73,21 +65,6 @@ function handleSend(text) {
 
 function handleStop() {
   emits("stop");
-}
-
-function openToolStatus() {
-  toolStatusVisible.value = true;
-}
-
-async function openSystemPrompt() {
-  try {
-    const response = await fetch(`${API_BASE}/prompt/current`);
-    if (!response.ok) throw new Error("Failed to load system prompt");
-    systemPromptContent.value = await response.text();
-    systemPromptVisible.value = true;
-  } catch (error) {
-    MessagePlugin.error(`Failed to load system prompt: ${error.message}`);
-  }
 }
 
 function handleRefreshTools() {
@@ -115,17 +92,5 @@ function handleRefreshTools() {
   gap: 8px;
   justify-content: flex-end;
   margin-bottom: 8px;
-}
-
-.system-prompt-content {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  font-size: 13px;
-  line-height: 1.5;
-  max-height: 600px;
-  overflow-y: auto;
-  background: var(--td-bg-color-container);
-  padding: 16px;
-  border-radius: 4px;
 }
 </style>

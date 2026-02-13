@@ -1,7 +1,7 @@
 @import "@tdesign-vue-next/chat/es/style/index.css";
 
 :root {
-  --td-chat-item-gap: 10px;
+  --td-chat-item-gap: 10px !important;
   --tool-call-max-height: 400px;
   --tool-status-max-height: 600px;
 }

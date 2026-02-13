@@ -350,15 +350,15 @@ class Agent:
         if images and messages and messages[-1]["role"] == "user":
             last_msg = messages[-1].copy()
             content = [{"type": "text", "text": last_msg.get("content", "")}]
-            for image_base64 in images:
-                content.append(
-                    {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
-                    }
-                )
+            content.extend(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+                }
+                for image_base64 in images
+            )
             last_msg["content"] = content
-            formatted_messages = messages[:-1] + [last_msg]
+            formatted_messages = [*messages[:-1], last_msg]
 
         body: dict[str, Any] = {
             "model": self.model,
@@ -462,7 +462,8 @@ class Agent:
                             item_id = event.get("item_id")
                             for call in tool_calls_data.values():
                                 if call.get("item_id") == item_id or call["id"] == event.get("call_id"):
-                                    call["function"]["arguments"] = event.get("arguments", call["function"]["arguments"])
+                                    arguments = event.get("arguments", call["function"]["arguments"])
+                                    call["function"]["arguments"] = arguments
                                     break
                         elif event_type in {"response.done", "response.completed"}:
                             status = ((event.get("response") or {}).get("status") or "").lower()
@@ -481,15 +482,14 @@ class Agent:
         if reasoning_content:
             yield {"type": "reasoning_end"}
 
-        tool_calls = []
-        for call in tool_calls_data.values():
-            tool_calls.append(
-                {
-                    "id": call["id"],
-                    "type": call["type"],
-                    "function": call["function"],
-                }
-            )
+        tool_calls = [
+            {
+                "id": call["id"],
+                "type": call["type"],
+                "function": call["function"],
+            }
+            for call in tool_calls_data.values()
+        ]
         if tool_calls and finish_reason == "stop":
             finish_reason = "tool_calls"
 

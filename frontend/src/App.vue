@@ -355,7 +355,7 @@ async function sendMessage(userInput) {
               };
               currentMessages = [...(messages.value || [])];
               currentMessages[currentMessages.length - 1] = currentAssistantMsg;
-              chatEngine.value?.setMessages(currentMessages, "replace");
+              messages.value = currentMessages;
               currentAssistantMsg = null;
               streamingContent = "";
             }
@@ -485,7 +485,6 @@ function stopMessage() {
   if (currentAbortController) {
     currentAbortController.abort();
   }
-  chatEngine.value?.abortChat();
 }
 
 // Format a single tool call - returns content array

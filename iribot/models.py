@@ -85,6 +85,11 @@ class AppConfig(BaseModel):
     openai_api_key: str = ""
     openai_model: str = "gpt-4-vision-preview"
     openai_base_url: str | None = None
+    openai_auth_mode: Literal["api_key", "codex"] = "api_key"
+    codex_access_token: str = ""
+    codex_refresh_token: str = ""
+    codex_account_id: str = ""
+    codex_expires_at: int = 0
     debug: bool = False
     app_title: str = "Agent Application"
     bash_path: str = "bash"
@@ -99,6 +104,11 @@ class AppConfigUpdate(BaseModel):
     openai_api_key: str | None = None
     openai_model: str | None = None
     openai_base_url: str | None = None
+    openai_auth_mode: Literal["api_key", "codex"] | None = None
+    codex_access_token: str | None = None
+    codex_refresh_token: str | None = None
+    codex_account_id: str | None = None
+    codex_expires_at: int | None = None
     debug: bool | None = None
     app_title: str | None = None
     bash_path: str | None = None

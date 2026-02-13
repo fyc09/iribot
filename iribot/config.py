@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 from threading import Lock
-from typing import Any
+from typing import Any, Literal
 
 from dotenv import dotenv_values
 from pydantic import BaseModel, Field
@@ -20,6 +20,11 @@ class Settings(BaseModel):
     openai_api_key: str = ""
     openai_model: str = "gpt-4-vision-preview"
     openai_base_url: str | None = None
+    openai_auth_mode: Literal["api_key", "codex"] = "api_key"
+    codex_access_token: str = ""
+    codex_refresh_token: str = ""
+    codex_account_id: str = ""
+    codex_expires_at: int = 0  # epoch milliseconds
 
     # Application Configuration
     debug: bool = False
@@ -68,6 +73,11 @@ def _settings_from_env_file() -> Settings:
         openai_api_key=env.get("OPENAI_API_KEY", "") or "",
         openai_model=env.get("OPENAI_MODEL", "gpt-4-vision-preview") or "gpt-4-vision-preview",
         openai_base_url=env.get("OPENAI_BASE_URL") or None,
+        openai_auth_mode=env.get("OPENAI_AUTH_MODE", "api_key") or "api_key",
+        codex_access_token=env.get("CODEX_ACCESS_TOKEN", "") or "",
+        codex_refresh_token=env.get("CODEX_REFRESH_TOKEN", "") or "",
+        codex_account_id=env.get("CODEX_ACCOUNT_ID", "") or "",
+        codex_expires_at=int(env.get("CODEX_EXPIRES_AT", 0) or 0),
         debug=_parse_bool(env.get("DEBUG")),
         app_title=env.get("APP_TITLE", "Agent Application") or "Agent Application",
         bash_path=env.get("BASH_PATH", "bash") or "bash",

@@ -8,14 +8,28 @@
   >
     <t-loading :loading="loading">
       <t-form label-align="left" label-width="180px">
-        <t-form-item label="OpenAI API Key">
+        <t-form-item label="Auth Mode">
+          <t-select v-model="form.openai_auth_mode" :options="authModeOptions" />
+        </t-form-item>
+        <t-form-item v-if="form.openai_auth_mode === 'api_key'" label="OpenAI API Key">
           <t-input v-model="form.openai_api_key" type="password" placeholder="sk-..." />
         </t-form-item>
+        <template v-else>
+          <t-form-item label="Codex OAuth">
+            <div class="codex-row">
+              <t-button :loading="codexLoading" @click="loginCodex">Login</t-button>
+              <t-button :loading="codexLoading" variant="outline" @click="refreshCodex">Refresh</t-button>
+            </div>
+          </t-form-item>
+          <t-form-item label="Codex Account">
+            <t-input :value="form.codex_account_id || 'Not logged in'" readonly />
+          </t-form-item>
+          <t-form-item label="Codex Expires">
+            <t-input :value="formatExpiresAt(form.codex_expires_at)" readonly />
+          </t-form-item>
+        </template>
         <t-form-item label="OpenAI Model">
           <t-input v-model="form.openai_model" />
-        </t-form-item>
-        <t-form-item label="OpenAI Base URL">
-          <t-input v-model="form.openai_base_url" placeholder="Optional" />
         </t-form-item>
         <t-form-item label="Enable Thinking">
           <t-switch v-model="form.enable_thinking" />
@@ -55,6 +69,7 @@ import { ref, watch } from "vue";
 import { MessagePlugin } from "tdesign-vue-next";
 
 const API_BASE = "/api";
+const OPENAI_BASE_URL_DEFAULT = "https://api.openai.com/v1";
 
 const props = defineProps({
   visible: {
@@ -67,10 +82,16 @@ const emits = defineEmits(["update:visible"]);
 
 const loading = ref(false);
 const saving = ref(false);
+const codexLoading = ref(false);
 const form = ref({
+  openai_auth_mode: "api_key",
   openai_api_key: "",
   openai_model: "gpt-4-vision-preview",
   openai_base_url: "",
+  codex_access_token: "",
+  codex_refresh_token: "",
+  codex_account_id: "",
+  codex_expires_at: 0,
   debug: false,
   bash_path: "bash",
   shell_type: "auto",
@@ -83,6 +104,10 @@ const shellTypeOptions = [
   { label: "auto", value: "auto" },
   { label: "bash", value: "bash" },
   { label: "cmd", value: "cmd" },
+];
+const authModeOptions = [
+  { label: "api_key", value: "api_key" },
+  { label: "codex", value: "codex" },
 ];
 
 function handleVisibleChange(nextVisible) {
@@ -103,9 +128,17 @@ async function loadConfig() {
     if (!response.ok) throw new Error("Failed to load configuration");
     const data = await response.json();
     form.value = {
+      openai_auth_mode: data.openai_auth_mode || "api_key",
       openai_api_key: data.openai_api_key || "",
       openai_model: data.openai_model || "gpt-4-vision-preview",
-      openai_base_url: data.openai_base_url || "",
+      openai_base_url:
+        data.openai_auth_mode === "api_key"
+          ? OPENAI_BASE_URL_DEFAULT
+          : (data.openai_base_url || ""),
+      codex_access_token: data.codex_access_token || "",
+      codex_refresh_token: data.codex_refresh_token || "",
+      codex_account_id: data.codex_account_id || "",
+      codex_expires_at: Number(data.codex_expires_at || 0),
       debug: Boolean(data.debug),
       bash_path: data.bash_path || "bash",
       shell_type: data.shell_type || "auto",
@@ -124,9 +157,14 @@ async function saveConfig() {
   saving.value = true;
   try {
     const payload = {
+      openai_auth_mode: form.value.openai_auth_mode || "api_key",
       openai_api_key: form.value.openai_api_key || "",
       openai_model: form.value.openai_model || "gpt-4-vision-preview",
       openai_base_url: form.value.openai_base_url || null,
+      codex_access_token: form.value.codex_access_token || "",
+      codex_refresh_token: form.value.codex_refresh_token || "",
+      codex_account_id: form.value.codex_account_id || "",
+      codex_expires_at: Number(form.value.codex_expires_at || 0),
       debug: Boolean(form.value.debug),
       bash_path: form.value.bash_path || "bash",
       shell_type: form.value.shell_type || "auto",
@@ -151,11 +189,70 @@ async function saveConfig() {
   }
 }
 
+function formatExpiresAt(expiresAt) {
+  if (!expiresAt) return "Unknown";
+  const date = new Date(Number(expiresAt));
+  if (Number.isNaN(date.getTime())) return "Invalid";
+  return date.toLocaleString();
+}
+
+async function loginCodex() {
+  codexLoading.value = true;
+  try {
+    const response = await fetch(`${API_BASE}/config/codex/login`, { method: "POST" });
+    if (!response.ok) throw new Error("Codex login failed");
+    const data = await response.json();
+    form.value = {
+      ...form.value,
+      openai_auth_mode: data.openai_auth_mode || "codex",
+      codex_access_token: data.codex_access_token || "",
+      codex_refresh_token: data.codex_refresh_token || "",
+      codex_account_id: data.codex_account_id || "",
+      codex_expires_at: Number(data.codex_expires_at || 0),
+    };
+    MessagePlugin.success("Codex login success");
+  } catch (error) {
+    MessagePlugin.error(`Codex login failed: ${error.message}`);
+  } finally {
+    codexLoading.value = false;
+  }
+}
+
+async function refreshCodex() {
+  codexLoading.value = true;
+  try {
+    const response = await fetch(`${API_BASE}/config/codex/refresh`, { method: "POST" });
+    if (!response.ok) throw new Error("Codex refresh failed");
+    const data = await response.json();
+    form.value = {
+      ...form.value,
+      codex_access_token: data.codex_access_token || "",
+      codex_refresh_token: data.codex_refresh_token || "",
+      codex_account_id: data.codex_account_id || "",
+      codex_expires_at: Number(data.codex_expires_at || 0),
+    };
+    MessagePlugin.success("Codex token refreshed");
+  } catch (error) {
+    MessagePlugin.error(`Codex refresh failed: ${error.message}`);
+  } finally {
+    codexLoading.value = false;
+  }
+}
+
 watch(
   () => props.visible,
   (nextVisible) => {
     if (nextVisible) {
       loadConfig();
+    }
+  },
+);
+
+watch(
+  () => form.value.openai_auth_mode,
+  (mode) => {
+    if (mode === "api_key") {
+      form.value.openai_base_url = OPENAI_BASE_URL_DEFAULT;
     }
   },
 );
@@ -165,6 +262,11 @@ watch(
 .config-footer {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.codex-row {
+  display: flex;
   gap: 8px;
 }
 </style>

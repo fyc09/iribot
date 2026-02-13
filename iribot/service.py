@@ -1,5 +1,6 @@
 """Main FastAPI application"""
 import json
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from .models import (
     SystemPromptGenerateResponse,
     ToolCallRecord,
 )
+from .openai_codex_auth import login_openai_codex, refresh_openai_codex_token
 from .prompt_generator import generate_system_prompt
 from .session_manager import session_manager
 from .tools.execute_command import stop_all_shell_sessions
@@ -181,6 +183,43 @@ def update_app_config(request: AppConfigUpdate):
     """Update runtime app configuration."""
     updates = request.model_dump(exclude_none=True)
     updated = update_settings(updates)
+    agent.reload_config()
+    return AppConfig(**updated.model_dump()).model_dump()
+
+
+@app.post("/api/config/codex/login")
+def codex_login():
+    """Start OpenAI Codex OAuth login and save tokens."""
+    tokens = login_openai_codex()
+    now_ms = int(time.time() * 1000)
+    updated = update_settings(
+        {
+            "openai_auth_mode": "codex",
+            "codex_access_token": tokens["access"],
+            "codex_refresh_token": tokens["refresh"],
+            "codex_account_id": tokens["account_id"],
+            "codex_expires_at": now_ms + int(tokens["expires_in"]) * 1000,
+        }
+    )
+    agent.reload_config()
+    return AppConfig(**updated.model_dump()).model_dump()
+
+
+@app.post("/api/config/codex/refresh")
+def codex_refresh():
+    """Refresh OpenAI Codex OAuth token."""
+    if not settings.codex_refresh_token:
+        raise HTTPException(status_code=400, detail="No Codex refresh token configured")
+    tokens = refresh_openai_codex_token(settings.codex_refresh_token)
+    now_ms = int(time.time() * 1000)
+    updated = update_settings(
+        {
+            "codex_access_token": tokens["access"],
+            "codex_refresh_token": tokens["refresh"],
+            "codex_account_id": tokens["account_id"],
+            "codex_expires_at": now_ms + int(tokens["expires_in"]) * 1000,
+        }
+    )
     agent.reload_config()
     return AppConfig(**updated.model_dump()).model_dump()
 

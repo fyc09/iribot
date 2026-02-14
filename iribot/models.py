@@ -80,6 +80,11 @@ class SessionCreate(BaseModel):
     system_prompt: str | None = None
 
 
+class SessionUpdate(BaseModel):
+    """Update session request."""
+    title: str
+
+
 class AppConfig(BaseModel):
     """Runtime application configuration."""
     openai_api_key: str = ""

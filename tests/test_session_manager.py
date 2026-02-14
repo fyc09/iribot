@@ -56,6 +56,23 @@ def test_delete_missing_session(tmp_path):
     assert manager.delete_session("does-not-exist") is False
 
 
+def test_update_session_title(tmp_path):
+    manager = SessionManager(storage_path=str(tmp_path))
+    session = manager.create_session(title="Old Title")
+    before_updated_at = session.updated_at
+
+    updated = manager.update_session_title(session.id, "New Title")
+    assert updated is not None
+    assert updated.title == "New Title"
+    assert updated.updated_at >= before_updated_at
+
+    persisted = manager.get_session(session.id)
+    assert persisted is not None
+    assert persisted.title == "New Title"
+
+    assert manager.update_session_title("does-not-exist", "X") is None
+
+
 def test_tool_call_truncation(tmp_path):
     """Test that older tool calls are truncated after tool_history_rounds"""
     with patch("iribot.session_manager.settings") as mock_settings:

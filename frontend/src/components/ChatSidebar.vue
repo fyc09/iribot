@@ -26,29 +26,54 @@
               <div class="session-title">{{ session.title }}</div>
               <div class="session-time">{{ formatTime(session.updated_at) }}</div>
             </div>
-            <t-button
-              theme="primary"
-              variant="text"
-              size="small"
-              @click="handleDeleteSession(session.id, $event)"
-              class="delete-btn"
-            >
-              <template #icon>
-                <delete-icon />
-              </template>
-            </t-button>
+            <div class="session-actions">
+              <t-dropdown
+                trigger="click"
+                :options="sessionActions"
+                @click="(item, context) => handleSessionAction(session.id, item, context.e)"
+              >
+                <t-button
+                  theme="primary"
+                  variant="text"
+                  size="small"
+                  @click.stop
+                  class="menu-btn"
+                >
+                  <template #icon>
+                    <more-icon />
+                  </template>
+                </t-button>
+              </t-dropdown>
+            </div>
           </div>
         </template>
       </t-list-item>
     </t-list>
 
+    <t-dialog
+      :visible="renameDialogVisible"
+      header="Rename Session"
+      width="420px"
+      :confirm-on-enter="false"
+      @confirm="confirmRename"
+      @update:visible="handleRenameDialogVisibleChange"
+    >
+      <t-input
+        ref="renameInputRef"
+        v-model="renameTitle"
+        placeholder="Enter a new session name"
+        @enter="confirmRename"
+      />
+    </t-dialog>
+
   </t-aside>
 </template>
 
 <script setup>
-import { AddIcon, DeleteIcon } from "tdesign-icons-vue-next";
+import { ref } from "vue";
+import { AddIcon, MoreIcon } from "tdesign-icons-vue-next";
 
-defineProps({
+const props = defineProps({
   sessions: {
     type: Array,
     required: true,
@@ -59,7 +84,21 @@ defineProps({
   },
 });
 
-const emits = defineEmits(["create-session", "select-session", "delete-session"]);
+const emits = defineEmits([
+  "create-session",
+  "select-session",
+  "delete-session",
+  "rename-session",
+]);
+
+const sessionActions = [
+  { content: "Rename", value: "rename" },
+  { content: "Delete", value: "delete", theme: "error" },
+];
+const renameDialogVisible = ref(false);
+const renameSessionId = ref(null);
+const renameTitle = ref("");
+const renameInputRef = ref(null);
 
 function handleCreateSession() {
   emits("create-session");
@@ -72,6 +111,40 @@ function handleSelectSession(sessionId) {
 function handleDeleteSession(sessionId, event) {
   event.stopPropagation();
   emits("delete-session", sessionId);
+}
+
+function handleRenameSession(sessionId, event) {
+  event.stopPropagation();
+  renameSessionId.value = sessionId;
+  renameTitle.value = props.sessions.find((session) => session.id === sessionId)?.title || "";
+  renameDialogVisible.value = true;
+  requestAnimationFrame(() => renameInputRef.value?.focus?.());
+}
+
+function handleRenameDialogVisibleChange(visible) {
+  renameDialogVisible.value = visible;
+  if (!visible) {
+    renameSessionId.value = null;
+    renameTitle.value = "";
+  }
+}
+
+function confirmRename() {
+  const trimmed = renameTitle.value.trim();
+  if (!trimmed || renameSessionId.value == null) return;
+  emits("rename-session", renameSessionId.value, trimmed);
+  handleRenameDialogVisibleChange(false);
+}
+
+function handleSessionAction(sessionId, item, event) {
+  if (!item?.value) return;
+  if (item.value === "delete") {
+    handleDeleteSession(sessionId, event);
+    return;
+  }
+  if (item.value === "rename") {
+    handleRenameSession(sessionId, event);
+  }
 }
 
 
@@ -125,16 +198,24 @@ function formatTime(timestamp) {
       }
     }
 
+    :deep(.t-list-item__content) {
+      width: 100%;
+      min-width: 0;
+    }
+
     .session-content {
       padding: 12px 16px;
+      width: 100%;
+      box-sizing: border-box;
       display: flex;
-      justify-content: space-between;
       align-items: center;
       transition: all 0.3s ease;
       gap: 8px;
+      color: var(--td-text-color-primary);
 
       &.active {
         background: linear-gradient(90deg, var(--td-brand-color-foil), transparent);
+        color: var(--td-brand-color);
 
         .session-info {
           .session-title {
@@ -166,14 +247,16 @@ function formatTime(timestamp) {
         }
       }
 
-      .delete-btn {
+      .session-actions {
+        margin-left: auto;
+        width: 28px;
         flex-shrink: 0;
-        opacity: 0;
-        transition: opacity 0.3s ease;
+        color: inherit;
       }
 
-      &:hover .delete-btn {
-        opacity: 1;
+      .menu-btn {
+        flex-shrink: 0;
+        color: inherit;
       }
     }
   }

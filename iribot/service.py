@@ -18,6 +18,7 @@ from .models import (
     ChatRequest,
     MessageRecord,
     SessionCreate,
+    SessionUpdate,
     SystemPromptGenerateRequest,
     SystemPromptGenerateResponse,
     ToolCallRecord,
@@ -164,6 +165,15 @@ def delete_session(session_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"status": "success"}
+
+
+@app.patch("/api/sessions/{session_id}")
+def update_session(session_id: str, request: SessionUpdate):
+    """Update a session."""
+    session = session_manager.update_session_title(session_id, request.title)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.model_dump()
 
 
 @app.get("/api/tools/status")

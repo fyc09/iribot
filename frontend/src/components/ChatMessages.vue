@@ -28,11 +28,11 @@
             />
             <t-chat-thinking
               v-else-if="item.type === 'reasoning'"
-              :content="{ title: '推理过程', text: item.data }"
-              :status="item.status === 'streaming' ? 'pending' : 'complete'"
+              :content="{ title: 'Reasoning', text: item.data }"
+              :status="message.status === 'streaming' ? 'pending' : 'complete'"
               layout="border"
-              :collapsed="item.collapsed"
-              @collapsed-change="item.collapsed = $event.detail"
+              :collapsed="message.collapsed"
+              @collapsed-change="message.collapsed = $event.detail"
             />
             <template v-else class="plain-content">{{ item.data }}</template>
           </template>

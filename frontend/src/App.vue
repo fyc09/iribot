@@ -6,6 +6,7 @@
       @create-session="createSession"
       @select-session="selectSession"
       @delete-session="deleteSession"
+      @rename-session="renameSession"
     />
     <ChatContainer
       :messages="messages"
@@ -282,7 +283,7 @@ async function sendMessage(userInput) {
               currentAssistantMsg = {
                 ...currentAssistantMsg,
                 status: "complete",
-                collapsed: false,
+                collapsed: true,
               };
               currentMessages = [...(messages.value || [])];
               currentMessages[currentMessages.length - 1] = currentAssistantMsg;
@@ -484,6 +485,25 @@ async function sendMessage(userInput) {
 function stopMessage() {
   if (currentAbortController) {
     currentAbortController.abort();
+  }
+}
+
+async function renameSession(sessionId, title) {
+  try {
+    const response = await fetch(`${API_BASE}/sessions/${sessionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    });
+    if (!response.ok) throw new Error("Failed to rename session");
+
+    const updated = await response.json();
+    sessions.value = sessions.value.map((session) =>
+      session.id === sessionId ? updated : session,
+    );
+    MessagePlugin.success("Session renamed successfully");
+  } catch (error) {
+    MessagePlugin.error(`Failed to rename session: ${error.message}`);
   }
 }
 

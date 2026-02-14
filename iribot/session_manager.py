@@ -69,6 +69,16 @@ class SessionManager:
             session_file.unlink()
         return True
 
+    def update_session_title(self, session_id: str, title: str) -> Session | None:
+        """Update a session title."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+        session.title = title
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return session
+
     def get_messages_for_llm(self, session_id: str) -> list[dict[str, Any]]:
         """Extract messages in LLM-compatible format from session records"""
         session = self.sessions.get(session_id)

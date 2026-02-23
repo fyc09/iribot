@@ -124,3 +124,52 @@ def test_tool_call_truncation(tmp_path):
             assert tool_call["function"]["name"] == f"tool_{i}"
             assert f"detail_{i}" in tool_call["function"]["arguments"]  # Arguments preserved
             assert f"result_{i}" in tool_result_messages[i]["content"]  # Result preserved
+
+
+def test_auto_generate_session_title_once(tmp_path):
+    manager = SessionManager(storage_path=str(tmp_path))
+    session = manager.create_session(title="Conversation 01/01 00:00")
+    manager.add_record(session.id, MessageRecord(role="user", content="How to optimize Vue app performance?").model_dump())
+    manager.add_record(session.id, MessageRecord(role="assistant", content="Use code splitting and caching.").model_dump())
+
+    updated = manager.auto_generate_session_title(
+        session.id,
+        generated_title="Vue performance optimization plan",
+        force=False,
+    )
+    assert updated is not None
+    assert updated.title == "Vue performance optimization plan"
+    assert updated.auto_title_generated is True
+
+    manager.update_session_title(session.id, "Manual Name")
+    unchanged = manager.auto_generate_session_title(
+        session.id,
+        generated_title="Should not override",
+        force=False,
+    )
+    assert unchanged is not None
+    assert unchanged.title == "Manual Name"
+
+
+def test_auto_generate_session_title_force_regenerate(tmp_path):
+    manager = SessionManager(storage_path=str(tmp_path))
+    session = manager.create_session(title="Initial Title")
+    manager.add_record(session.id, MessageRecord(role="user", content="Build a CLI to process large JSON files in Python").model_dump())
+    manager.add_record(session.id, MessageRecord(role="assistant", content="Use streaming and incremental parsing.").model_dump())
+
+    first = manager.auto_generate_session_title(
+        session.id,
+        generated_title="Python CLI for JSON processing",
+        force=False,
+    )
+    assert first is not None
+    assert first.auto_title_generated is True
+
+    manager.update_session_title(session.id, "Custom Title")
+    forced = manager.auto_generate_session_title(
+        session.id,
+        generated_title="Large JSON processing CLI",
+        force=True,
+    )
+    assert forced is not None
+    assert forced.title == "Large JSON processing CLI"

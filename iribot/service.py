@@ -17,6 +17,7 @@ from .models import (
     AppConfigUpdate,
     ChatRequest,
     MessageRecord,
+    SessionAutoTitleRequest,
     SessionCreate,
     SessionUpdate,
     SystemPromptGenerateRequest,
@@ -39,6 +40,43 @@ async def lifespan(_app: FastAPI):
 def _sse_data(data: dict) -> str:
     """Create SSE data string with JSON serialization"""
     return f"data: {json.dumps(data, default=str)}\n\n"
+
+
+def _normalize_generated_title(raw: str) -> str:
+    """Normalize model output to a single concise session title."""
+    title = (raw or "").strip()
+    if not title:
+        return ""
+    title = title.splitlines()[0].strip()
+    title = title.strip("\"'` ")
+    title = " ".join(title.split())
+    if len(title) > 60:
+        title = f"{title[:60].rstrip()}..."
+    return title
+
+
+def _generate_title_with_chat_stream(session_id: str) -> str:
+    """Generate a session title via agent.chat_stream from current dialogue."""
+    messages = session_manager.get_messages_for_llm(session_id)
+    title_request = {
+        "role": "user",
+        "content": (
+            "Based on the conversation above, generate one concise session title. "
+            "Return only the title text, no quotes, no prefix, max 20 words."
+        ),
+    }
+    generated = ""
+    for chunk in agent.chat_stream(
+        messages=[*messages, title_request],
+        system_prompt=(
+            "You generate short chat session titles from conversation context. "
+            "Do not call tools. Output only the final title text."
+        ),
+    ):
+        if chunk.get("type") == "done":
+            generated = chunk.get("content", "") or ""
+            break
+    return _normalize_generated_title(generated)
 
 
 # Initialize FastAPI app
@@ -171,6 +209,30 @@ def delete_session(session_id: str):
 def update_session(session_id: str, request: SessionUpdate):
     """Update a session."""
     session = session_manager.update_session_title(session_id, request.title)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session.model_dump()
+
+
+@app.post("/api/sessions/{session_id}/auto-title")
+def auto_title_session(session_id: str, request: SessionAutoTitleRequest):
+    """Auto-generate a session title from chat records."""
+    existing_session = session_manager.get_session(session_id)
+    if not existing_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if existing_session.auto_title_generated and not request.force:
+        return existing_session.model_dump()
+
+    generated_title = _generate_title_with_chat_stream(session_id)
+    if not generated_title:
+        raise HTTPException(status_code=500, detail="Failed to generate session title")
+
+    session = session_manager.auto_generate_session_title(
+        session_id=session_id,
+        generated_title=generated_title,
+        force=request.force,
+    )
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session.model_dump()

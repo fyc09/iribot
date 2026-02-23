@@ -44,6 +44,7 @@ class Session(BaseModel):
     id: str = Field(default_factory=lambda: str(datetime.now().timestamp()))
     title: str
     records: list[dict[str, Any]] = []  # List of MessageRecord or ToolCallRecord
+    auto_title_generated: bool = False
     created_at: datetime = Field(default_factory=get_local_now)
     updated_at: datetime = Field(default_factory=get_local_now)
 
@@ -83,6 +84,11 @@ class SessionCreate(BaseModel):
 class SessionUpdate(BaseModel):
     """Update session request."""
     title: str
+
+
+class SessionAutoTitleRequest(BaseModel):
+    """Auto title generation request."""
+    force: bool = False
 
 
 class AppConfig(BaseModel):

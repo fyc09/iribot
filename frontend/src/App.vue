@@ -7,6 +7,7 @@
       @select-session="selectSession"
       @delete-session="deleteSession"
       @rename-session="renameSession"
+      @auto-title-session="autoTitleSession"
     />
     <ChatContainer
       :messages="messages"
@@ -193,6 +194,10 @@ async function sendMessage(userInput) {
 
   // Create a new AbortController
   currentAbortController = new AbortController();
+  const shouldAutoTitleAfterFirstAssistant = !messages.value.some(
+    (message) => message.role === "assistant",
+  );
+  let streamAborted = false;
 
   try {
     // Get current message list and add the user message
@@ -442,9 +447,14 @@ async function sendMessage(userInput) {
       }
     }
 
+    if (shouldAutoTitleAfterFirstAssistant && !streamAborted) {
+      await generateSessionTitle(currentSessionId.value, { force: false, silent: true });
+    }
+
     await loadSessions();
   } catch (error) {
     if (error.name === "AbortError") {
+      streamAborted = true;
       // User aborted
       const currentMessages = [...(messages.value || [])];
       const lastMsg = currentMessages[currentMessages.length - 1];
@@ -504,6 +514,40 @@ async function renameSession(sessionId, title) {
     MessagePlugin.success("Session renamed successfully");
   } catch (error) {
     MessagePlugin.error(`Failed to rename session: ${error.message}`);
+  }
+}
+
+async function autoTitleSession(sessionId) {
+  await generateSessionTitle(sessionId, { force: true, silent: false });
+}
+
+async function generateSessionTitle(sessionId, options = {}) {
+  const { force = false, silent = true } = options;
+
+  try {
+    const response = await fetch(`${API_BASE}/sessions/${sessionId}/auto-title`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force }),
+    });
+    if (!response.ok) throw new Error("Failed to generate session title");
+
+    const updated = await response.json();
+    sessions.value = sessions.value.map((session) =>
+      session.id === sessionId ? updated : session,
+    );
+
+    if (!silent) {
+      MessagePlugin.success("Session title generated successfully");
+    }
+    return updated;
+  } catch (error) {
+    if (!silent) {
+      MessagePlugin.error(`Failed to generate session title: ${error.message}`);
+    } else {
+      console.error("Failed to auto-generate session title:", error);
+    }
+    return null;
   }
 }
 

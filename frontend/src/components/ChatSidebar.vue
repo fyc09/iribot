@@ -89,10 +89,12 @@ const emits = defineEmits([
   "select-session",
   "delete-session",
   "rename-session",
+  "auto-title-session",
 ]);
 
 const sessionActions = [
   { content: "Rename", value: "rename" },
+  { content: "Auto Generate Title", value: "auto-title" },
   { content: "Delete", value: "delete", theme: "error" },
 ];
 const renameDialogVisible = ref(false);
@@ -121,6 +123,11 @@ function handleRenameSession(sessionId, event) {
   requestAnimationFrame(() => renameInputRef.value?.focus?.());
 }
 
+function handleAutoTitleSession(sessionId, event) {
+  event.stopPropagation();
+  emits("auto-title-session", sessionId);
+}
+
 function handleRenameDialogVisibleChange(visible) {
   renameDialogVisible.value = visible;
   if (!visible) {
@@ -144,6 +151,10 @@ function handleSessionAction(sessionId, item, event) {
   }
   if (item.value === "rename") {
     handleRenameSession(sessionId, event);
+    return;
+  }
+  if (item.value === "auto-title") {
+    handleAutoTitleSession(sessionId, event);
   }
 }
 

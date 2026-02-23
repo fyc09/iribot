@@ -79,6 +79,30 @@ class SessionManager:
         self._save_session(session)
         return session
 
+    def auto_generate_session_title(
+        self,
+        session_id: str,
+        generated_title: str,
+        force: bool = False,
+    ) -> Session | None:
+        """Persist an auto-generated title from model output."""
+        session = self.sessions.get(session_id)
+        if not session:
+            return None
+
+        if session.auto_title_generated and not force:
+            return session
+
+        title = (generated_title or "").strip()
+        if not title:
+            return session
+
+        session.title = title
+        session.auto_title_generated = True
+        session.updated_at = datetime.now()
+        self._save_session(session)
+        return session
+
     def get_messages_for_llm(self, session_id: str) -> list[dict[str, Any]]:
         """Extract messages in LLM-compatible format from session records"""
         session = self.sessions.get(session_id)
@@ -208,7 +232,6 @@ class SessionManager:
         data["records"] = records
         del data["messages"]
         return data
-
 
 # Global session manager instance
 session_manager = SessionManager()
